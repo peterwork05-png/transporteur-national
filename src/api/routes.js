@@ -91,27 +91,51 @@ router.post('/orders', async (req, res) => {
 router.post('/webhook/woocommerce', async (req, res) => {
   try {
     const order = req.body;
-    const orderId = `DEL-${new Date().getFullYear()}-${String(order.id).padStart(4, '0')}`;
-    const address = `${order.shipping?.address_1 || order.billing?.address_1}, ${order.shipping?.city || order.billing?.city}`;
+    console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 200));
+
+    // Generate order ID from WooCommerce order number
+    const wcOrderId = order.id || order.number || Date.now();
+    const orderId = `DEL-${new Date().getFullYear()}-${String(wcOrderId).padStart(4, '0')}`;
+
+    // Get address
+    const shipping = order.shipping || {};
+    const billing = order.billing || {};
+    const addr1 = shipping.address_1 || billing.address_1 || '';
+    const city = shipping.city || billing.city || '';
+    const address = addr1 && city ? `${addr1}, ${city}` : addr1 || city || 'Address pending';
+
     const amount = parseFloat(order.total) || 0;
-    const boxes = order.line_items?.reduce((sum, item) => sum + item.quantity, 0) || 1;
+    const boxes = order.line_items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
 
     // Try to match client by email
-    const email = order.billing?.email;
-    let clientId = 'beg'; // default
+    const email = billing.email || '';
+    let clientId = null;
+
     if (email) {
       const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [email]);
       if (rows.length > 0) clientId = rows[0].id;
     }
 
+    // If no client match, create a new client entry
+    if (!clientId) {
+      const clientName = billing.company || `${billing.first_name || ''} ${billing.last_name || ''}`.trim() || email || 'New Client';
+      const newClientId = `client_${wcOrderId}`;
+      await pool.query(`
+        INSERT INTO clients (id, name, address, email, language, signoff)
+        VALUES ($1, $2, $3, $4, 'fr', 'MERCI DE VOTRE CONFIANCE!')
+        ON CONFLICT (id) DO NOTHING
+      `, [newClientId, clientName, address, email]);
+      clientId = newClientId;
+    }
+
     await pool.query(`
-      INSERT INTO orders (id, client_id, address, boxes, amount, status)
-      VALUES ($1, $2, $3, $4, $5, 'waiting')
+      INSERT INTO orders (id, client_id, address, boxes, amount, status, date)
+      VALUES ($1, $2, $3, $4, $5, 'waiting', CURRENT_DATE)
       ON CONFLICT (id) DO NOTHING
     `, [orderId, clientId, address, boxes, amount]);
 
-    console.log(`✅ WooCommerce order received: ${orderId}`);
-    res.json({ success: true, order_id: orderId });
+    console.log(`✅ WooCommerce order created: ${orderId} for client: ${clientId}`);
+    res.json({ success: true, order_id: orderId, client_id: clientId });
   } catch (err) {
     console.error('❌ Webhook error:', err);
     res.status(500).json({ error: err.message });
