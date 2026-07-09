@@ -5,12 +5,23 @@ const router = express.Router();
 
 // ── ORDERS ──────────────────────────────────────────────
 
-// Get all orders (optionally filter by date or driver)
+// Clean all orders (admin only - for resetting)
+router.delete('/orders/clean', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM orders');
+    res.json({ success: true, message: 'All orders deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all orders (optionally filter by date, driver, or client)
 router.get('/orders', async (req, res) => {
   try {
-    const { date, driver_id } = req.query;
+    const { date, driver_id, client_id } = req.query;
     let query = `
       SELECT o.*, c.name as client_name, c.address as client_address,
+             c.email as client_email, c.phone as client_phone,
              d.name as driver_name, d.initials as driver_initials, d.color as driver_color
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
@@ -20,6 +31,7 @@ router.get('/orders', async (req, res) => {
     const params = [];
     if (date) { params.push(date); query += ` AND o.date = $${params.length}`; }
     if (driver_id) { params.push(driver_id); query += ` AND o.driver_id = $${params.length}`; }
+    if (client_id) { params.push(client_id); query += ` AND o.client_id = $${params.length}`; }
     query += ' ORDER BY o.created_at DESC';
     const { rows } = await pool.query(query, params);
     res.json(rows);
