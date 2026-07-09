@@ -1,37 +1,203 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import { SAMPLE_ORDERS, SAMPLE_INVOICES } from '../data/store';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { SAMPLE_INVOICES } from '../data/store';
 
 const AppContext = createContext(null);
+const API = '/api';
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [orders, setOrders] = useState(SAMPLE_ORDERS);
+  const [orders, setOrders] = useState([]);
   const [invoices, setInvoices] = useState(SAMPLE_INVOICES);
+  const [drivers, setDrivers] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [ontarioRoute, setOntarioRoute] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(15).fill(null), arrivals: [] });
   const [quebecRoute, setQuebecRoute] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(10).fill(null), arrivals: [] });
 
   const login = useCallback((role, name) => setUser({ role, name, initials: name.split(' ').map(n => n[0]).join('') }), []);
   const logout = useCallback(() => setUser(null), []);
 
-  const updateOrderStatus = useCallback((id, status, extra = {}) => {
+  // Fetch orders from API
+  const fetchOrders = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch(`${API}/orders?date=${today}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Map API response to app format
+        const mapped = data.map(o => ({
+          id: o.id,
+          client: o.client_id,
+          address: o.address,
+          boxes: o.boxes,
+          amount: parseFloat(o.amount),
+          status: o.status,
+          driver: o.driver_id,
+          date: o.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+          pickedUpAt: o.picked_up_at,
+          onWayAt: o.on_way_at,
+          deliveredAt: o.delivered_at,
+          clientName: o.client_name,
+          driverName: o.driver_name,
+          driverInitials: o.driver_initials,
+          driverColor: o.driver_color,
+        }));
+        setOrders(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to fetch orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch drivers from API
+  const fetchDrivers = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/drivers`);
+      if (res.ok) setDrivers(await res.json());
+    } catch (err) {
+      console.error('Failed to fetch drivers:', err);
+    }
+  }, []);
+
+  // Fetch clients from API
+  const fetchClients = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/clients`);
+      if (res.ok) setClients(await res.json());
+    } catch (err) {
+      console.error('Failed to fetch clients:', err);
+    }
+  }, []);
+
+  // Fetch invoices from API
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/invoices`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length > 0) setInvoices(data.map(i => ({
+          id: i.id,
+          type: i.type,
+          client: i.client_id,
+          route: i.route,
+          dates: `${i.date_from || ''} – ${i.date_to || ''}`,
+          amount: parseFloat(i.total || 0),
+          days: i.days,
+          status: i.status,
+          eft: i.eft_number,
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch invoices:', err);
+    }
+  }, []);
+
+  // Load all data on mount
+  useEffect(() => {
+    fetchOrders();
+    fetchDrivers();
+    fetchClients();
+    fetchInvoices();
+  }, []);
+
+  // Update order status in DB and locally
+  const updateOrderStatus = useCallback(async (id, status, extra = {}) => {
+    // Update locally first (optimistic)
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status, ...extra } : o));
+    // Then save to DB
+    try {
+      await fetch(`${API}/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, ...extra }),
+      });
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+    }
   }, []);
 
-  const addInvoice = useCallback((inv) => {
-    setInvoices(prev => [inv, ...prev]);
+  // Verify PIN against DB
+  const verifyPin = useCallback(async (type, pin, driverId = null) => {
+    try {
+      const res = await fetch(`${API}/auth/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, pin, id: driverId }),
+      });
+      return await res.json();
+    } catch (err) {
+      return { success: false };
+    }
   }, []);
 
-  const markInvoicePaid = useCallback((ids, eft) => {
+  // Client login
+  const clientLogin = useCallback(async (email, password) => {
+    try {
+      const res = await fetch(`${API}/auth/client-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      return await res.json();
+    } catch (err) {
+      return { success: false, error: 'Connection error' };
+    }
+  }, []);
+
+  const addInvoice = useCallback(async (inv) => {
+    try {
+      const res = await fetch(`${API}/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: inv.type,
+          client_id: inv.client,
+          route: inv.route,
+          date_from: inv.dateFrom,
+          date_to: inv.dateTo,
+          days: inv.days,
+          subtotal: inv.amount / 1.14975,
+          tps: (inv.amount / 1.14975) * 0.05,
+          tvq: (inv.amount / 1.14975) * 0.09975,
+          total: inv.amount,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setInvoices(prev => [{ ...inv, id: saved.id }, ...prev]);
+      }
+    } catch (err) {
+      setInvoices(prev => [inv, ...prev]);
+    }
+  }, []);
+
+  const markInvoicePaid = useCallback(async (ids, eft) => {
     setInvoices(prev => prev.map(inv => ids.includes(inv.id) ? { ...inv, status: 'paid', eft } : inv));
+    try {
+      await Promise.all(ids.map(id =>
+        fetch(`${API}/invoices/${id}/pay`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eft_number: eft }),
+        })
+      ));
+    } catch (err) {
+      console.error('Failed to mark invoices paid:', err);
+    }
   }, []);
 
   return (
     <AppContext.Provider value={{
       user, login, logout,
-      orders, updateOrderStatus,
-      invoices, addInvoice, markInvoicePaid,
+      orders, updateOrderStatus, fetchOrders, loading,
+      drivers, fetchDrivers,
+      clients, fetchClients,
+      invoices, addInvoice, markInvoicePaid, fetchInvoices,
       ontarioRoute, setOntarioRoute,
       quebecRoute, setQuebecRoute,
+      verifyPin, clientLogin,
     }}>
       {children}
     </AppContext.Provider>
