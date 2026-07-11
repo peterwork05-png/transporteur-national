@@ -21,7 +21,7 @@ router.get('/orders', async (req, res) => {
     const { date, driver_id, client_id } = req.query;
     let query = `
       SELECT o.*, c.name as client_name, c.address as client_address,
-             c.email as client_email, c.phone as client_phone,
+             c.email as client_email,
              d.name as driver_name, d.initials as driver_initials, d.color as driver_color
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
