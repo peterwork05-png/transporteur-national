@@ -5,7 +5,7 @@ const router = express.Router();
 
 // ── ORDERS ──────────────────────────────────────────────
 
-// Clean all orders (admin only - for resetting)
+// Clean all orders
 router.delete('/orders/clean', async (req, res) => {
   try {
     await pool.query('DELETE FROM orders');
@@ -15,13 +15,14 @@ router.delete('/orders/clean', async (req, res) => {
   }
 });
 
-// Get all orders (optionally filter by date, driver, or client)
+// Get all orders
 router.get('/orders', async (req, res) => {
   try {
     const { date, driver_id, client_id } = req.query;
     let query = `
-      SELECT o.*, c.name as client_name, c.address as client_address,
-             c.email as client_email,
+      SELECT o.*, 
+             c.name as client_name, c.address as client_address,
+             c.email as client_email, c.phone as client_phone,
              d.name as driver_name, d.initials as driver_initials, d.color as driver_color
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
@@ -44,7 +45,9 @@ router.get('/orders', async (req, res) => {
 router.get('/orders/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT o.*, c.name as client_name, c.address as client_address,
+      SELECT o.*, 
+             c.name as client_name, c.address as client_address,
+             c.email as client_email, c.phone as client_phone,
              d.name as driver_name, d.initials as driver_initials, d.color as driver_color
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
@@ -82,16 +85,31 @@ router.patch('/orders/:id/status', async (req, res) => {
   }
 });
 
-// Create order (from WooCommerce webhook)
+// Assign driver to order
+router.patch('/orders/:id/assign', async (req, res) => {
+  try {
+    const { driver_id } = req.body;
+    const { rows } = await pool.query(`
+      UPDATE orders SET driver_id = $1, updated_at = NOW()
+      WHERE id = $2 RETURNING *
+    `, [driver_id, req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create order
 router.post('/orders', async (req, res) => {
   try {
-    const { id, client_id, driver_id, address, boxes, amount, date } = req.body;
+    const { id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone } = req.body;
     const { rows } = await pool.query(`
-      INSERT INTO orders (id, client_id, driver_id, address, boxes, amount, date)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO orders (id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (id) DO NOTHING
       RETURNING *
-    `, [id, client_id, driver_id, address, boxes, amount, date || new Date().toISOString().split('T')[0]]);
+    `, [id, client_id, driver_id, address, boxes, amount, date || new Date().toISOString().split('T')[0], notes, billing_name, billing_email, billing_phone]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -103,50 +121,64 @@ router.post('/orders', async (req, res) => {
 router.post('/webhook/woocommerce', async (req, res) => {
   try {
     const order = req.body;
-    console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 200));
+    console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 300));
 
-    // Generate order ID from WooCommerce order number
     const wcOrderId = order.id || order.number || Date.now();
     const orderId = `DEL-${new Date().getFullYear()}-${String(wcOrderId).padStart(4, '0')}`;
 
-    // Get address
     const shipping = order.shipping || {};
     const billing = order.billing || {};
     const addr1 = shipping.address_1 || billing.address_1 || '';
+    const addr2 = shipping.address_2 || billing.address_2 || '';
     const city = shipping.city || billing.city || '';
-    const address = addr1 && city ? `${addr1}, ${city}` : addr1 || city || 'Address pending';
+    const province = shipping.state || billing.state || '';
+    const postal = shipping.postcode || billing.postcode || '';
+    const address = [addr1, addr2, city, province, postal].filter(Boolean).join(', ') || 'Address pending';
 
     const amount = parseFloat(order.total) || 0;
     const boxes = order.line_items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
+    const notes = order.customer_note || order.order_notes || '';
+
+    // Billing info
+    const billingName = `${billing.first_name || ''} ${billing.last_name || ''}`.trim() || billing.company || '';
+    const billingEmail = billing.email || '';
+    const billingPhone = billing.phone || '';
 
     // Try to match client by email
-    const email = billing.email || '';
     let clientId = null;
-
-    if (email) {
-      const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [email]);
+    if (billingEmail) {
+      const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [billingEmail]);
       if (rows.length > 0) clientId = rows[0].id;
     }
 
-    // If no client match, create a new client entry
+    // If no match, create new client
     if (!clientId) {
-      const clientName = billing.company || `${billing.first_name || ''} ${billing.last_name || ''}`.trim() || email || 'New Client';
+      const clientName = billing.company || billingName || billingEmail || 'New Client';
       const newClientId = `client_${wcOrderId}`;
       await pool.query(`
-        INSERT INTO clients (id, name, address, email, language, signoff)
-        VALUES ($1, $2, $3, $4, 'fr', 'MERCI DE VOTRE CONFIANCE!')
+        INSERT INTO clients (id, name, address, email, phone, language, signoff)
+        VALUES ($1, $2, $3, $4, $5, 'fr', 'MERCI DE VOTRE CONFIANCE!')
         ON CONFLICT (id) DO NOTHING
-      `, [newClientId, clientName, address, email]);
+      `, [newClientId, clientName, address, billingEmail, billingPhone]);
       clientId = newClientId;
     }
 
-    await pool.query(`
-      INSERT INTO orders (id, client_id, address, boxes, amount, status, date)
-      VALUES ($1, $2, $3, $4, $5, 'waiting', CURRENT_DATE)
-      ON CONFLICT (id) DO NOTHING
-    `, [orderId, clientId, address, boxes, amount]);
+    // Add phone to orders table if column exists
+    try {
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_email VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_phone VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT`);
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+    } catch(e) {}
 
-    console.log(`✅ WooCommerce order created: ${orderId} for client: ${clientId}`);
+    await pool.query(`
+      INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes, billing_name, billing_email, billing_phone)
+      VALUES ($1, $2, $3, $4, $5, 'waiting', CURRENT_DATE, $6, $7, $8, $9)
+      ON CONFLICT (id) DO NOTHING
+    `, [orderId, clientId, address, boxes, amount, notes, billingName, billingEmail, billingPhone]);
+
+    console.log(`✅ Order created: ${orderId} | Client: ${clientId} | ${billingName} | ${billingPhone}`);
     res.json({ success: true, order_id: orderId, client_id: clientId });
   } catch (err) {
     console.error('❌ Webhook error:', err);
@@ -295,39 +327,6 @@ router.patch('/invoices/:id/pay', async (req, res) => {
       UPDATE invoices SET status = 'paid', eft_number = $1, paid_at = NOW()
       WHERE id = $2 RETURNING *
     `, [eft_number, req.params.id]);
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── ROUTE TRACKING ────────────────────────────────────────
-
-router.post('/route-days', async (req, res) => {
-  try {
-    const { route, driver_id, started_at } = req.body;
-    const today = new Date().toISOString().split('T')[0];
-    const { rows } = await pool.query(`
-      INSERT INTO route_days (route, driver_id, date, started_at)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT DO NOTHING
-      RETURNING *
-    `, [route, driver_id, today, started_at]);
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.patch('/route-days/:id/stop', async (req, res) => {
-  try {
-    const { stop_index, status, arrived_at } = req.body;
-    const { rows } = await pool.query(`
-      INSERT INTO route_stops (route_day_id, stop_index, stop_name, status, arrived_at)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT DO NOTHING
-      RETURNING *
-    `, [req.params.id, stop_index, req.body.stop_name, status, arrived_at]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
