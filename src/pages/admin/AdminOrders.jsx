@@ -198,8 +198,57 @@ export default function AdminOrders() {
                       </a>
                     </div>
                   )}
+                  {selected.store_number && (
+                    <div>
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Store</p>
+                      <p className="font-semibold text-sm mt-0.5">{selected.store_number}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Pickup info */}
+              {selected.pickup_location && (
+                <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                  <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>📍 Pickup location</p>
+                  <p className="font-medium text-sm">{selected.pickup_location}</p>
+                </div>
+              )}
+
+              {/* Recipient info */}
+              {(selected.to_associate_name || selected.to_business_phone || selected.requested_delivery_time || selected.po_number) && (
+                <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                  <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Recipient & delivery info</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selected.to_associate_name && (
+                      <div>
+                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Recipient name</p>
+                        <p className="font-semibold text-sm mt-0.5">{selected.to_associate_name}</p>
+                      </div>
+                    )}
+                    {selected.to_business_phone && (
+                      <div>
+                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Recipient phone</p>
+                        <a href={`tel:${selected.to_business_phone}`} className="font-medium text-sm mt-0.5 block" style={{color:'var(--tn-red)'}}>
+                          📞 {selected.to_business_phone}
+                        </a>
+                      </div>
+                    )}
+                    {selected.requested_delivery_time && (
+                      <div>
+                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Requested time</p>
+                        <p className="font-semibold text-sm mt-0.5">🕐 {selected.requested_delivery_time}</p>
+                      </div>
+                    )}
+                    {selected.po_number && (
+                      <div>
+                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>PO Number</p>
+                        <p className="font-semibold text-sm mt-0.5 font-mono">{selected.po_number}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Delivery address */}
               <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
