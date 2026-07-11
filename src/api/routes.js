@@ -121,65 +121,126 @@ router.post('/orders', async (req, res) => {
 router.post('/webhook/woocommerce', async (req, res) => {
   try {
     const order = req.body;
-    console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 300));
+    console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 500));
 
     const wcOrderId = order.id || order.number || Date.now();
     const orderId = `DEL-${new Date().getFullYear()}-${String(wcOrderId).padStart(4, '0')}`;
 
-    const shipping = order.shipping || {};
-    const billing = order.billing || {};
-    const addr1 = shipping.address_1 || billing.address_1 || '';
-    const addr2 = shipping.address_2 || billing.address_2 || '';
-    const city = shipping.city || billing.city || '';
-    const province = shipping.state || billing.state || '';
-    const postal = shipping.postcode || billing.postcode || '';
-    const address = [addr1, addr2, city, province, postal].filter(Boolean).join(', ') || 'Address pending';
+    // Extract custom fields from meta_data
+    const meta = {};
+    if (order.meta_data && Array.isArray(order.meta_data)) {
+      order.meta_data.forEach(m => { meta[m.key] = m.value; });
+    }
 
-    const amount = parseFloat(order.total) || 0;
-    const boxes = order.line_items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
-    const notes = order.customer_note || order.order_notes || '';
+    // Also check line items meta
+    const lineItemMeta = {};
+    if (order.line_items && order.line_items.length > 0) {
+      order.line_items.forEach(item => {
+        if (item.meta_data) item.meta_data.forEach(m => { lineItemMeta[m.key] = m.value; });
+      });
+    }
+
+    const billing = order.billing || {};
+    const shipping = order.shipping || {};
+
+    // Delivery address — use To_dropoff_location if available, fallback to shipping/billing
+    const dropoffLocation = meta['To_dropoff_location'] || lineItemMeta['To_dropoff_location'];
+    const shippingAddr = [shipping.address_1, shipping.address_2, shipping.city, shipping.state, shipping.postcode].filter(Boolean).join(', ');
+    const billingAddr = [billing.address_1, billing.address_2, billing.city, billing.state, billing.postcode].filter(Boolean).join(', ');
+    const address = dropoffLocation || shippingAddr || billingAddr || 'Address pending';
+
+    // Pickup location
+    const pickupLocation = meta['From_pickup_location'] || lineItemMeta['From_pickup_location'] || '';
+
+    // People
+    const fromAssociateName = meta['From_associate_name'] || lineItemMeta['From_associate_name'] || '';
+    const fromAssociatePhone = meta['From_associate_phone'] || lineItemMeta['From_associate_phone'] || '';
+    const toAssociateName = meta['To_associate_name'] || lineItemMeta['To_associate_name'] || '';
+    const toBusinessName = meta['To_business_name'] || lineItemMeta['To_business_name'] || '';
+    const toBusinessPhone = meta['To_business_phone'] || lineItemMeta['To_business_phone'] || '';
+    const toDeliveredTime = meta['To_delivered_time'] || lineItemMeta['To_delivered_time'] || '';
+    const toDropoffDate = meta['To_dropoff_date'] || lineItemMeta['To_dropoff_date'] || '';
+    const fromPickupDate = meta['From_pickup_date'] || lineItemMeta['From_pickup_date'] || '';
+
+    // Order details
+    const storeNumber = meta['Store_number'] || lineItemMeta['Store_number'] || '';
+    const poNumber = meta['Po_number'] || lineItemMeta['Po_number'] || '';
+    const typeBoite = meta['Type_boite'] || lineItemMeta['Type_boite'] || '';
+    const villePrix = meta['Ville_prix'] || lineItemMeta['Ville_prix'] || '';
+    const deliveryNotes = meta['Delivery_order_notes'] || lineItemMeta['Delivery_order_notes'] || order.customer_note || '';
+    const quantite = parseInt(meta['Quantite'] || lineItemMeta['Quantite'] || '1');
+
+    const amount = parseFloat(villePrix || order.total) || 0;
+    const boxes = quantite || order.line_items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
 
     // Billing info
     const billingName = `${billing.first_name || ''} ${billing.last_name || ''}`.trim() || billing.company || '';
-    const billingEmail = billing.email || '';
-    const billingPhone = billing.phone || '';
+    const billingEmail = meta['Email'] || billing.email || '';
+    const billingPhone = fromAssociatePhone || billing.phone || '';
 
-    // Try to match client by email
+    // Build notes string with all relevant info
+    const notesArray = [
+      deliveryNotes && `Notes: ${deliveryNotes}`,
+      storeNumber && `Store: ${storeNumber}`,
+      poNumber && `PO#: ${poNumber}`,
+      typeBoite && `Box type: ${typeBoite}`,
+      toDeliveredTime && `Requested delivery time: ${toDeliveredTime}`,
+      fromAssociateName && `From: ${fromAssociateName}${fromAssociatePhone ? ` (${fromAssociatePhone})` : ''}`,
+      pickupLocation && `Pickup: ${pickupLocation}`,
+      fromPickupDate && `Pickup date: ${fromPickupDate}`,
+      toDropoffDate && `Dropoff date: ${toDropoffDate}`,
+    ].filter(Boolean);
+    const notes = notesArray.join(' | ');
+
+    // Try to match client by store number or email
     let clientId = null;
-    if (billingEmail) {
+    if (storeNumber) {
+      const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${storeNumber}%`]);
+      if (rows.length > 0) clientId = rows[0].id;
+    }
+    if (!clientId && billingEmail) {
       const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [billingEmail]);
       if (rows.length > 0) clientId = rows[0].id;
     }
 
-    // If no match, create new client
+    // Create new client if no match
     if (!clientId) {
-      const clientName = billing.company || billingName || billingEmail || 'New Client';
+      const clientName = toBusinessName || billing.company || billingName || billingEmail || 'New Client';
       const newClientId = `client_${wcOrderId}`;
       await pool.query(`
-        INSERT INTO clients (id, name, address, email, phone, language, signoff)
-        VALUES ($1, $2, $3, $4, $5, 'fr', 'MERCI DE VOTRE CONFIANCE!')
+        INSERT INTO clients (id, name, address, email, language, signoff)
+        VALUES ($1, $2, $3, $4, 'fr', 'MERCI DE VOTRE CONFIANCE!')
         ON CONFLICT (id) DO NOTHING
-      `, [newClientId, clientName, address, billingEmail, billingPhone]);
+      `, [newClientId, clientName, address, billingEmail]);
       clientId = newClientId;
     }
 
-    // Add phone to orders table if column exists
+    // Ensure extra columns exist
     try {
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_email VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_phone VARCHAR(50)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT`);
-      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
-    } catch(e) {}
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location TEXT`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_associate_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_phone VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS po_number VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requested_delivery_time VARCHAR(20)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_number VARCHAR(50)`);
+    } catch(e) { console.log('Column add note:', e.message); }
 
     await pool.query(`
-      INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes, billing_name, billing_email, billing_phone)
-      VALUES ($1, $2, $3, $4, $5, 'waiting', CURRENT_DATE, $6, $7, $8, $9)
+      INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
+        billing_name, billing_email, billing_phone, pickup_location,
+        to_associate_name, to_business_phone, po_number, requested_delivery_time, store_number)
+      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       ON CONFLICT (id) DO NOTHING
-    `, [orderId, clientId, address, boxes, amount, notes, billingName, billingEmail, billingPhone]);
+    `, [orderId, clientId, address, boxes, amount, notes,
+        billingName, billingEmail, billingPhone, pickupLocation,
+        toAssociateName, toBusinessPhone, poNumber, toDeliveredTime, storeNumber]);
 
-    console.log(`✅ Order created: ${orderId} | Client: ${clientId} | ${billingName} | ${billingPhone}`);
-    res.json({ success: true, order_id: orderId, client_id: clientId });
+    console.log(`✅ Order: ${orderId} | To: ${toAssociateName} at ${address} | Store: ${storeNumber} | PO: ${poNumber}`);
+    res.json({ success: true, order_id: orderId, client_id: clientId, to: address, store: storeNumber });
   } catch (err) {
     console.error('❌ Webhook error:', err);
     res.status(500).json({ error: err.message });
