@@ -20,9 +20,9 @@ router.get('/orders', async (req, res) => {
   try {
     const { date, driver_id, client_id } = req.query;
     let query = `
-      SELECT o.*, 
+      SELECT o.*,
              c.name as client_name, c.address as client_address,
-             c.email as client_email, c.phone as client_phone,
+             c.email as client_email,
              d.name as driver_name, d.initials as driver_initials, d.color as driver_color
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
@@ -30,7 +30,7 @@ router.get('/orders', async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
-    if (date) { params.push(date); query += ` AND o.date = $${params.length}`; }
+    if (date)      { params.push(date);      query += ` AND o.date = $${params.length}`; }
     if (driver_id) { params.push(driver_id); query += ` AND o.driver_id = $${params.length}`; }
     if (client_id) { params.push(client_id); query += ` AND o.client_id = $${params.length}`; }
     query += ' ORDER BY o.created_at DESC';
@@ -223,21 +223,29 @@ router.post('/webhook/woocommerce', async (req, res) => {
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location TEXT`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_associate_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_phone VARCHAR(50)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS po_number VARCHAR(50)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requested_delivery_time VARCHAR(20)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_number VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS type_boite VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_dropoff_date VARCHAR(20)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_pickup_date VARCHAR(20)`);
     } catch(e) { console.log('Column add note:', e.message); }
 
     await pool.query(`
       INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
         billing_name, billing_email, billing_phone, pickup_location,
-        to_associate_name, to_business_phone, po_number, requested_delivery_time, store_number)
-      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        to_associate_name, to_business_name, to_business_phone,
+        po_number, requested_delivery_time, store_number, type_boite,
+        to_dropoff_date, from_pickup_date)
+      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       ON CONFLICT (id) DO NOTHING
     `, [orderId, clientId, address, boxes, amount, notes,
         billingName, billingEmail, billingPhone, pickupLocation,
-        toAssociateName, toBusinessPhone, poNumber, toDeliveredTime, storeNumber]);
+        toAssociateName, toBusinessName, toBusinessPhone,
+        poNumber, toDeliveredTime, storeNumber, typeBoite,
+        toDropoffDate, fromPickupDate]);
 
     console.log(`✅ Order: ${orderId} | To: ${toAssociateName} at ${address} | Store: ${storeNumber} | PO: ${poNumber}`);
     res.json({ success: true, order_id: orderId, client_id: clientId, to: address, store: storeNumber });
