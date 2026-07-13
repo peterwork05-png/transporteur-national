@@ -242,7 +242,7 @@ export default function AdminOrders() {
                     { label:'Quantity',     val: selected.boxes },
                     { label:'Box type',     val: selected.type_boite },
                     { label:'Amount',       val: selected.amount ? `$${parseFloat(selected.amount).toFixed(2)}` : null },
-                    { label:'Date',         val: selected.date?.split('T')[0] || selected.date },
+                    { label:'Date',         val: selected.date ? String(selected.date).split('T')[0] : null },
                   ].filter(i => i.val).map((item, i) => (
                     <div key={i}>
                       <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
@@ -252,11 +252,15 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Notes */}
+              {/* Notes — show only the actual note, not the full concatenated string */}
               {selected.notes && (
                 <div className="rounded-xl p-3" style={{background:'#FEF3C7', border:'0.5px solid #D97706'}}>
                   <p className="text-xs mb-1 font-medium" style={{color:'#92400E'}}>📝 Delivery notes</p>
-                  <p className="text-sm" style={{color:'#92400E'}}>{selected.notes}</p>
+                  <p className="text-sm" style={{color:'#92400E'}}>
+                    {selected.notes.startsWith('Notes:')
+                      ? selected.notes.split('|')[0].replace('Notes:', '').trim()
+                      : selected.notes}
+                  </p>
                 </div>
               )}
 
@@ -268,7 +272,7 @@ export default function AdminOrders() {
                     const rank = STATUS_STEPS.indexOf(selected.status);
                     const done = i <= rank;
                     const times = {
-                      waiting:   selected.date,
+                      waiting:   selected.date ? String(selected.date).split('T')[0] : null,
                       picked:    selected.pickedUpAt || selected.picked_up_at,
                       enroute:   selected.onWayAt    || selected.on_way_at,
                       delivered: selected.deliveredAt|| selected.delivered_at,
