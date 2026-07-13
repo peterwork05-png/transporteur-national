@@ -86,7 +86,8 @@ export default function AdminOrders() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Desktop table */}
+      <div className="card overflow-hidden hidden md:block">
         <table className="w-full">
           <thead>
             <tr style={{borderBottom:'0.5px solid var(--tn-border)'}}>
@@ -123,6 +124,37 @@ export default function AdminOrders() {
         {filtered.length === 0 && (
           <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>
         )}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-2 md:hidden">
+        {filtered.length === 0 && (
+          <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>
+        )}
+        {filtered.map(order => {
+          const b = STATUS_BADGE[order.status] || STATUS_BADGE.waiting;
+          const hasDriver = order.driver || order.driver_id;
+          return (
+            <div key={order.id} className="card p-4 cursor-pointer" onClick={() => setSelected(order)}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">{clientName(order)}</p>
+                  <p className="font-mono text-xs mt-0.5" style={{color:'var(--tn-red)'}}>{order.id}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{color:'var(--tn-gold)'}}>{order.address}</p>
+                </div>
+                <span className={`badge ${b.cls} flex-shrink-0`}>{b.label}</span>
+              </div>
+              <div className="flex items-center justify-between mt-2 pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+                <div className="text-xs" style={{color:'var(--tn-gold)'}}>
+                  {hasDriver ? driverName(order) : <span className="badge badge-danger">Unassigned</span>}
+                </div>
+                <div className="text-xs" style={{color:'var(--tn-gold)'}}>
+                  {order.boxes} boxes · ${parseFloat(order.amount||0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Order detail modal */}
