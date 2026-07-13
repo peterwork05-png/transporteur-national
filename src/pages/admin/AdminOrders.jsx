@@ -32,7 +32,7 @@ export default function AdminOrders() {
     return true;
   });
 
-  const clientName = (o) => o.clientName || o.billing_name || CLIENTS[o.client]?.name || o.client || '—';
+  const clientName = (o) => o.clientName || o.client_name || o.to_business_name || o.billing_name || CLIENTS[o.client]?.name || o.client || '—';
   const driverName = (o) => o.driverName || (o.driver==='peter'?'Peter':o.driver==='marc'?'Marc D.':o.driver||'—');
 
   const assignDriver = async (orderId, driverId) => {
@@ -44,8 +44,16 @@ export default function AdminOrders() {
         body: JSON.stringify({ driver_id: driverId }),
       });
       await fetchOrders();
-      // Update selected order
-      setSelected(prev => prev ? { ...prev, driver_id: driverId, driver: driverId } : null);
+      // Find the full driver object
+      const fullDriver = drivers.find(d => d.id === driverId);
+      setSelected(prev => prev ? {
+        ...prev,
+        driver_id: driverId,
+        driver: driverId,
+        driverName: fullDriver?.name || driverId,
+        driverInitials: fullDriver?.initials || driverId?.substring(0,2).toUpperCase(),
+        driverColor: fullDriver?.color || 'var(--tn-red)',
+      } : null);
     } catch (err) {
       console.error('Failed to assign driver:', err);
     }
@@ -152,20 +160,15 @@ export default function AdminOrders() {
                       </div>
                       <p className="font-semibold text-sm">{driverName(selected)}</p>
                     </div>
-                    <button onClick={() => assignDriver(selected.id, null)} className="btn btn-outline btn-sm text-xs">
-                      Change driver
-                    </button>
+                    <button onClick={() => assignDriver(selected.id, null)} className="btn btn-outline btn-sm text-xs">Change driver</button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {localDrivers.map(driver => (
-                      <button key={driver.id}
-                        onClick={() => assignDriver(selected.id, driver.id)}
-                        disabled={assigning}
+                      <button key={driver.id} onClick={() => assignDriver(selected.id, driver.id)} disabled={assigning}
                         className="flex items-center gap-2 p-2.5 rounded-xl text-left transition-all"
                         style={{background:'white', border:'0.5px solid var(--tn-border)'}}>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                          style={{background: driver.color}}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{background: driver.color}}>
                           {driver.initials}
                         </div>
                         <p className="text-sm font-medium">{driver.name}</p>
@@ -175,110 +178,87 @@ export default function AdminOrders() {
                 )}
               </div>
 
-              {/* Client info */}
+              {/* FROM — Pickup info */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Client information</p>
+                <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>📦 From — Pickup</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>Name</p>
-                    <p className="font-semibold text-sm mt-0.5">{clientName(selected)}</p>
-                  </div>
-                  {(selected.billing_email || selected.clientEmail) && (
-                    <div>
-                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Email</p>
-                      <p className="font-medium text-sm mt-0.5 truncate">{selected.billing_email || selected.clientEmail}</p>
+                  {[
+                    { label:'Associate name',  val: selected.billing_name || selected.from_associate_name },
+                    { label:'Associate phone', val: selected.billing_phone, phone: true },
+                    { label:'Pickup date',     val: selected.from_pickup_date || selected.pickup_date },
+                    { label:'Store / Client',  val: selected.store_number },
+                    { label:'Email',           val: selected.billing_email },
+                  ].filter(i => i.val).map((item, i) => (
+                    <div key={i}>
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
+                      {item.phone
+                        ? <a href={`tel:${item.val}`} className="font-medium text-sm mt-0.5 block" style={{color:'var(--tn-red)'}}>📞 {item.val}</a>
+                        : <p className="font-medium text-sm mt-0.5">{item.val}</p>
+                      }
                     </div>
-                  )}
-                  {(selected.billing_phone || selected.clientPhone) && (
-                    <div>
-                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Phone</p>
-                      <a href={`tel:${selected.billing_phone || selected.clientPhone}`}
-                        className="font-medium text-sm mt-0.5 block" style={{color:'var(--tn-red)'}}>
-                        📞 {selected.billing_phone || selected.clientPhone}
-                      </a>
-                    </div>
-                  )}
-                  {selected.store_number && (
-                    <div>
-                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Store</p>
-                      <p className="font-semibold text-sm mt-0.5">{selected.store_number}</p>
+                  ))}
+                  {selected.pickup_location && (
+                    <div className="col-span-2">
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Pickup address</p>
+                      <p className="font-medium text-sm mt-0.5">{selected.pickup_location}</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Pickup info */}
-              {selected.pickup_location && (
-                <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                  <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>📍 Pickup location</p>
-                  <p className="font-medium text-sm">{selected.pickup_location}</p>
-                </div>
-              )}
-
-              {/* Recipient info */}
-              {(selected.to_associate_name || selected.to_business_phone || selected.requested_delivery_time || selected.po_number) && (
-                <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
-                  <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Recipient & delivery info</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {selected.to_associate_name && (
-                      <div>
-                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Recipient name</p>
-                        <p className="font-semibold text-sm mt-0.5">{selected.to_associate_name}</p>
-                      </div>
-                    )}
-                    {selected.to_business_phone && (
-                      <div>
-                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Recipient phone</p>
-                        <a href={`tel:${selected.to_business_phone}`} className="font-medium text-sm mt-0.5 block" style={{color:'var(--tn-red)'}}>
-                          📞 {selected.to_business_phone}
-                        </a>
-                      </div>
-                    )}
-                    {selected.requested_delivery_time && (
-                      <div>
-                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>Requested time</p>
-                        <p className="font-semibold text-sm mt-0.5">🕐 {selected.requested_delivery_time}</p>
-                      </div>
-                    )}
-                    {selected.po_number && (
-                      <div>
-                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>PO Number</p>
-                        <p className="font-semibold text-sm mt-0.5 font-mono">{selected.po_number}</p>
-                      </div>
-                    )}
+              {/* TO — Delivery info */}
+              <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>🚚 To — Delivery</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label:'Associate name',   val: selected.to_associate_name },
+                    { label:'Business name',    val: selected.to_business_name },
+                    { label:'Business phone',   val: selected.to_business_phone, phone: true },
+                    { label:'Dropoff date',     val: selected.to_dropoff_date },
+                    { label:'Deliver by time',  val: selected.requested_delivery_time },
+                  ].filter(i => i.val).map((item, i) => (
+                    <div key={i}>
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
+                      {item.phone
+                        ? <a href={`tel:${item.val}`} className="font-medium text-sm mt-0.5 block" style={{color:'var(--tn-red)'}}>📞 {item.val}</a>
+                        : <p className="font-medium text-sm mt-0.5">{item.val}</p>
+                      }
+                    </div>
+                  ))}
+                  <div className="col-span-2">
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>Delivery address</p>
+                    <p className="font-medium text-sm mt-0.5">{selected.address}</p>
                   </div>
                 </div>
-              )}
-
-              {/* Delivery address */}
-              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Delivery address</p>
-                <p className="font-medium text-sm">{selected.address}</p>
               </div>
 
-              {/* Order notes */}
+              {/* Order details */}
+              <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>📋 Order details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label:'PO Number',    val: selected.po_number },
+                    { label:'Store number', val: selected.store_number },
+                    { label:'Quantity',     val: selected.boxes },
+                    { label:'Box type',     val: selected.type_boite },
+                    { label:'Amount',       val: selected.amount ? `$${parseFloat(selected.amount).toFixed(2)}` : null },
+                    { label:'Date',         val: selected.date },
+                  ].filter(i => i.val).map((item, i) => (
+                    <div key={i}>
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
+                      <p className="font-semibold text-sm mt-0.5">{item.val}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
               {selected.notes && (
                 <div className="rounded-xl p-3" style={{background:'#FEF3C7', border:'0.5px solid #D97706'}}>
-                  <p className="text-xs mb-1" style={{color:'#92400E'}}>📝 Order notes</p>
+                  <p className="text-xs mb-1 font-medium" style={{color:'#92400E'}}>📝 Delivery notes</p>
                   <p className="text-sm" style={{color:'#92400E'}}>{selected.notes}</p>
                 </div>
               )}
-
-              {/* Order info */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                  <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Boxes</p>
-                  <p className="font-semibold text-sm">{selected.boxes}</p>
-                </div>
-                <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                  <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Amount</p>
-                  <p className="font-semibold text-sm">${parseFloat(selected.amount||0).toFixed(2)}</p>
-                </div>
-                <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                  <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Date</p>
-                  <p className="font-semibold text-sm">{selected.date}</p>
-                </div>
-              </div>
 
               {/* Delivery timeline */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
@@ -288,10 +268,10 @@ export default function AdminOrders() {
                     const rank = STATUS_STEPS.indexOf(selected.status);
                     const done = i <= rank;
                     const times = {
-                      waiting: selected.date,
-                      picked: selected.pickedUpAt || selected.picked_up_at,
-                      enroute: selected.onWayAt || selected.on_way_at,
-                      delivered: selected.deliveredAt || selected.delivered_at,
+                      waiting:   selected.date,
+                      picked:    selected.pickedUpAt || selected.picked_up_at,
+                      enroute:   selected.onWayAt    || selected.on_way_at,
+                      delivered: selected.deliveredAt|| selected.delivered_at,
                     };
                     return (
                       <div key={step} className="flex items-center gap-3">
@@ -316,14 +296,14 @@ export default function AdminOrders() {
                     <span className="text-lg">📷</span>
                     <div>
                       <p className="text-xs font-medium" style={{color:'#0F6E56'}}>Delivery photo</p>
-                      <p className="text-xs" style={{color:'#0F6E56'}}>{selected.photoUrl||selected.photo_url?'View':'Pending'}</p>
+                      <p className="text-xs" style={{color:'#0F6E56'}}>{selected.photo_url?'View':'Pending'}</p>
                     </div>
                   </div>
                   <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
                     <span className="text-lg">✍️</span>
                     <div>
                       <p className="text-xs font-medium" style={{color:'#0F6E56'}}>Signature</p>
-                      <p className="text-xs" style={{color:'#0F6E56'}}>{selected.recipientName||selected.recipient_name||'Pending'}</p>
+                      <p className="text-xs" style={{color:'#0F6E56'}}>{selected.recipient_name||'Pending'}</p>
                     </div>
                   </div>
                 </div>
