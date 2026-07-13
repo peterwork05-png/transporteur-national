@@ -254,7 +254,7 @@ export default function DriverLocal() {
                         )}
                         {order.requestedTime && (
                           <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                            <p className="text-xs" style={{color:'var(--tn-gold)'}}>Requested time</p>
+                            <p className="text-xs" style={{color:'var(--tn-gold)'}}>Deliver by</p>
                             <p className="font-semibold text-sm">🕐 {order.requestedTime}</p>
                           </div>
                         )}
