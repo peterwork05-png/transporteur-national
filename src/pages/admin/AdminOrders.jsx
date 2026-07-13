@@ -183,9 +183,9 @@ export default function AdminOrders() {
                 <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>📦 From — Pickup</p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label:'Associate name',  val: selected.billing_name || selected.from_associate_name },
+                    { label:'Associate name',  val: selected.from_associate_name || selected.billing_name },
                     { label:'Associate phone', val: selected.billing_phone, phone: true },
-                    { label:'Pickup date',     val: selected.from_pickup_date || selected.pickup_date },
+                    { label:'Pickup date',     val: selected.from_pickup_date },
                     { label:'Store / Client',  val: selected.store_number },
                     { label:'Email',           val: selected.billing_email },
                   ].filter(i => i.val).map((item, i) => (
@@ -211,11 +211,11 @@ export default function AdminOrders() {
                 <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>🚚 To — Delivery</p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label:'Associate name',   val: selected.to_associate_name },
-                    { label:'Business name',    val: selected.to_business_name },
-                    { label:'Business phone',   val: selected.to_business_phone, phone: true },
-                    { label:'Dropoff date',     val: selected.to_dropoff_date },
-                    { label:'Deliver by time',  val: selected.requested_delivery_time },
+                    { label:'Associate name',  val: selected.to_associate_name },
+                    { label:'Business name',   val: selected.to_business_name },
+                    { label:'Business phone',  val: selected.to_business_phone, phone: true },
+                    { label:'Dropoff date',    val: selected.to_dropoff_date },
+                    { label:'Deliver by time', val: selected.requested_delivery_time },
                   ].filter(i => i.val).map((item, i) => (
                     <div key={i}>
                       <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
@@ -242,7 +242,7 @@ export default function AdminOrders() {
                     { label:'Quantity',     val: selected.boxes },
                     { label:'Box type',     val: selected.type_boite },
                     { label:'Amount',       val: selected.amount ? `$${parseFloat(selected.amount).toFixed(2)}` : null },
-                    { label:'Date',         val: selected.date },
+                    { label:'Date',         val: selected.date?.split('T')[0] || selected.date },
                   ].filter(i => i.val).map((item, i) => (
                     <div key={i}>
                       <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
