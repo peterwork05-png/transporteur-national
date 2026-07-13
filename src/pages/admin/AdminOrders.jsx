@@ -63,7 +63,7 @@ export default function AdminOrders() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchOrders} className="btn btn-outline btn-sm">↻ Refresh</button>
-          <span className="badge badge-info">{orders.filter(o=>['picked','enroute'].includes(o.status)).length} active</span>
+          <span className="badge badge-info">{orders.filter(o=>['waiting','picked','enroute'].includes(o.status)&&(o.driver||o.driver_id)).length} active</span>
         </div>
       </div>
 
