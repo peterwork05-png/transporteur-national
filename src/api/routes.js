@@ -217,6 +217,7 @@ router.post('/webhook/woocommerce', async (req, res) => {
 
     // Ensure extra columns exist
     try {
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_associate_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_email VARCHAR(100)`);
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_phone VARCHAR(50)`);
@@ -236,13 +237,15 @@ router.post('/webhook/woocommerce', async (req, res) => {
     await pool.query(`
       INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
         billing_name, billing_email, billing_phone, pickup_location,
+        from_associate_name,
         to_associate_name, to_business_name, to_business_phone,
         po_number, requested_delivery_time, store_number, type_boite,
         to_dropoff_date, from_pickup_date)
-      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       ON CONFLICT (id) DO NOTHING
     `, [orderId, clientId, address, boxes, amount, notes,
         billingName, billingEmail, billingPhone, pickupLocation,
+        fromAssociateName,
         toAssociateName, toBusinessName, toBusinessPhone,
         poNumber, toDeliveredTime, storeNumber, typeBoite,
         toDropoffDate, fromPickupDate]);
