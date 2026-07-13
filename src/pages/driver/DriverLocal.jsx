@@ -173,7 +173,7 @@ export default function DriverLocal() {
                         <p className="text-xs mt-0.5 truncate" style={{color:'var(--tn-gold)'}}>{order.address}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <p className="text-xs" style={{color:'rgba(139,105,20,0.6)'}}>{order.boxes} box{order.boxes>1?'es':''}</p>
-                          {order.storeNumber && <p className="text-xs" style={{color:'rgba(139,105,20,0.6)'}}>· {order.storeNumber}</p>}
+                          {order.storeNumber && <p className="text-xs" style={{color:'rgba(139,105,20,0.6)'}}>· Store {order.storeNumber}</p>}
                           {order.requestedTime && <p className="text-xs font-medium" style={{color:'var(--tn-red)'}}>· 🕐 {order.requestedTime}</p>}
                         </div>
                       </div>
@@ -263,7 +263,11 @@ export default function DriverLocal() {
                       {order.notes && (
                         <div className="rounded-xl p-3" style={{background:'#FEF3C7',border:'0.5px solid #D97706'}}>
                           <p className="text-xs mb-1" style={{color:'#92400E'}}>📝 Notes</p>
-                          <p className="text-sm" style={{color:'#92400E'}}>{order.notes}</p>
+                          <p className="text-sm" style={{color:'#92400E'}}>
+                            {order.notes.startsWith('Notes:')
+                              ? order.notes.split('|')[0].replace('Notes:', '').trim()
+                              : order.notes}
+                          </p>
                         </div>
                       )}
                     </div>
