@@ -18,7 +18,7 @@ router.delete('/orders/clean', async (req, res) => {
 // Get all orders
 router.get('/orders', async (req, res) => {
   try {
-    const { date, driver_id, client_id, days } = req.query;
+    const { date, driver_id, client_id, days, date_from, date_to, all } = req.query;
     let query = `
       SELECT o.*,
              c.name as client_name, c.address as client_address,
@@ -30,18 +30,20 @@ router.get('/orders', async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
-    if (days) {
-      params.push(parseInt(days));
+    if (all === 'true') {
+      // No date filter — return everything
+      if (date_from) { params.push(date_from); query += ` AND o.date >= $${params.length}`; }
+      if (date_to)   { params.push(date_to);   query += ` AND o.date <= $${params.length}`; }
+    } else if (days) {
       query += ` AND o.date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'`;
     } else if (date) {
-      params.push(date);
-      query += ` AND o.date = $${params.length}`;
+      params.push(date); query += ` AND o.date = $${params.length}`;
     } else {
       query += ` AND o.date = CURRENT_DATE`;
     }
     if (driver_id) { params.push(driver_id); query += ` AND o.driver_id = $${params.length}`; }
     if (client_id) { params.push(client_id); query += ` AND o.client_id = $${params.length}`; }
-    query += ' ORDER BY o.created_at DESC';
+    query += ' ORDER BY o.date DESC, o.created_at DESC';
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
