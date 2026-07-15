@@ -12,7 +12,7 @@ const STATUS_BADGE = {
 };
 
 export default function AdminToday() {
-  const { orders, ontarioRoute, quebecRoute, invoices, fetchOrders } = useApp();
+  const { orders, ontarioRoute, quebecRoute, invoices, fetchOrders, drivers } = useApp();
   const navigate = useNavigate();
   const [activityDetail, setActivityDetail] = useState(null);
   const today = format(new Date(), 'EEEE, MMMM d, yyyy');
@@ -107,13 +107,16 @@ export default function AdminToday() {
         </div>
       </div>
 
-      {/* Driver avatars */}
+      {/* Driver avatars — from database */}
       <div className="flex items-center gap-2 mb-5">
         <p className="text-xs" style={{color:'var(--tn-gold)'}}>On duty:</p>
         <div className="flex -space-x-1.5">
-          {[['MD','var(--tn-red)'],['PE','#7C3AED'],['JL','#8B4513'],['PT','#0F6E56']].map(([i,bg],idx)=>(
-            <div key={idx} className="w-7 h-7 rounded-full border-2 flex items-center justify-center text-white text-xs font-bold"
-              style={{borderColor:'var(--tn-cream)',background:bg}}>{i}</div>
+          {(drivers || []).map((d, idx) => (
+            <div key={d.id} className="w-7 h-7 rounded-full border-2 flex items-center justify-center text-white text-xs font-bold"
+              style={{borderColor:'var(--tn-cream)', background: d.color}}
+              title={d.name}>
+              {d.initials}
+            </div>
           ))}
         </div>
       </div>
@@ -169,9 +172,12 @@ export default function AdminToday() {
           <span className="badge badge-success">Both active</span>
         </div>
         <div className="space-y-4">
-          {[
-            {label:'Ontario / Gatineau',done:onDone,total:15,driver:'Jean-Luc B.',fillCls:'progress-fill-red',started:ontarioRoute.started},
-            {label:'Québec route',      done:qcDone,total:10,driver:'Pierre T.',  fillCls:'progress-fill-gold',started:quebecRoute.started},
+        {(() => {
+          const ontarioDriver = drivers?.find(d => d.role === 'ontario');
+          const quebecDriver  = drivers?.find(d => d.role === 'quebec');
+          return [
+            {label:'Ontario / Gatineau', done:onDone, total:15, driver: ontarioDriver?.name || 'Ontario driver', fillCls:'progress-fill-red',  started:ontarioRoute.started},
+            {label:'Québec route',       done:qcDone, total:10, driver: quebecDriver?.name  || 'Québec driver',  fillCls:'progress-fill-gold', started:quebecRoute.started},
           ].map((route,i)=>(
             <div key={i} className="cursor-pointer" onClick={()=>navigate('/admin/routes')}>
               <div className="flex items-center justify-between mb-1">
@@ -181,7 +187,8 @@ export default function AdminToday() {
               <p className="text-xs mb-2" style={{color:'var(--tn-gold)'}}>{route.driver} · {route.started?'In progress':'Not started'}</p>
               <div className="progress-bar"><div className={route.fillCls} style={{width:`${(route.done/route.total)*100}%`}}/></div>
             </div>
-          ))}
+          ));
+        })()}
           <p className="text-xs" style={{color:'var(--tn-gold)',borderTop:'0.5px solid var(--tn-border)',paddingTop:'8px'}}>Auto-invoice generates Sunday</p>
         </div>
       </div>
