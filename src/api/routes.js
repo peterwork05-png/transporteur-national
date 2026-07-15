@@ -295,15 +295,17 @@ router.post('/drivers', async (req, res) => {
 
 router.patch('/drivers/:id', async (req, res) => {
   try {
-    const { name, pin, role, color } = req.body;
+    const { name, pin, role, color, initials, active } = req.body;
     const { rows } = await pool.query(`
       UPDATE drivers SET
-        name = COALESCE($1, name),
-        pin = COALESCE($2, pin),
-        role = COALESCE($3, role),
-        color = COALESCE($4, color)
-      WHERE id = $5 RETURNING *
-    `, [name, pin, role, color, req.params.id]);
+        name     = COALESCE($1, name),
+        pin      = COALESCE($2, pin),
+        role     = COALESCE($3, role),
+        color    = COALESCE($4, color),
+        initials = COALESCE($5, initials),
+        active   = COALESCE($6, active)
+      WHERE id = $7 RETURNING *
+    `, [name, pin, role, color, initials, active, req.params.id]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
