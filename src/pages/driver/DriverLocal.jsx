@@ -70,7 +70,16 @@ export default function DriverLocal() {
     return () => { if (iv) clearInterval(iv); };
   }, [driver, period]);
 
+  const [filter, setFilter] = useState('all'); // 'all' | 'remaining' | 'delivered'
+
   const delivered = orders.filter(o => o.status === 'delivered').length;
+  const remaining = orders.filter(o => o.status !== 'delivered').length;
+
+  const filteredOrders = orders.filter(o => {
+    if (filter === 'delivered') return o.status === 'delivered';
+    if (filter === 'remaining') return o.status !== 'delivered';
+    return true;
+  });
 
   const now = () => new Date().toLocaleTimeString('en-CA',{ hour:'2-digit', minute:'2-digit', hour12:true });
 
@@ -124,17 +133,24 @@ export default function DriverLocal() {
       </div>
 
       <div className="p-4 max-w-lg mx-auto">
-        {/* Stats — no price */}
+        {/* Stats — tappable filters */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label:'Delivered', val:delivered,                                         color:'var(--tn-red)' },
-            { label:'Remaining', val:orders.filter(o=>o.status!=='delivered').length,   color:'var(--tn-gold)' },
-            { label:'Orders',    val:orders.length,                                     color:'#185FA5' },
+            { label:'Delivered', val:delivered,                                       color:'var(--tn-red)',  key:'delivered' },
+            { label:'Remaining', val:orders.filter(o=>o.status!=='delivered').length, color:'var(--tn-gold)', key:'remaining' },
+            { label:'All orders', val:orders.length,                                  color:'#185FA5',        key:'all' },
           ].map((s,i)=>(
-            <div key={i} className="card p-3 text-center">
+            <button key={i} onClick={() => setFilter(s.key)}
+              className="card p-3 text-center transition-all"
+              style={{
+                borderColor: filter===s.key ? s.color : 'var(--tn-border)',
+                borderWidth: filter===s.key ? '2px' : '0.5px',
+              }}>
               <div className="text-xl font-semibold" style={{color:s.color}}>{s.val}</div>
-              <div className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{s.label}</div>
-            </div>
+              <div className="text-xs mt-0.5" style={{color:filter===s.key ? s.color : 'var(--tn-gold)'}}>
+                {s.label}{filter===s.key?' ●':''}
+              </div>
+            </button>
           ))}
         </div>
 
@@ -167,15 +183,19 @@ export default function DriverLocal() {
 
         {tab==='orders' && (
           <div className="space-y-3">
-            {orders.length===0 && (
+            {filteredOrders.length===0 && (
               <div className="card p-8 text-center">
                 <p className="text-3xl mb-2">📦</p>
-                <p className="font-medium">No orders assigned yet</p>
-                <p className="text-sm mt-1" style={{color:'var(--tn-gold)'}}>Admin will assign orders to you</p>
+                <p className="font-medium">
+                  {filter==='delivered' ? 'No deliveries yet' : filter==='remaining' ? 'All done! 🎉' : 'No orders assigned yet'}
+                </p>
+                <p className="text-sm mt-1" style={{color:'var(--tn-gold)'}}>
+                  {filter==='all' ? 'Admin will assign orders to you' : `Tap "All orders" to see everything`}
+                </p>
               </div>
             )}
 
-            {orders.map(order => {
+            {filteredOrders.map(order => {
               const rank     = STATUS_RANK[order.status] || 0;
               const isActive = activeEnroute === order.id;
               const isExp    = expanded === order.id;
