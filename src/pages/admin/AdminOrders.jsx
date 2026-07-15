@@ -15,7 +15,9 @@ const STATUS_LABELS = { waiting:'Order placed', picked:'Picked up', enroute:'En 
 export default function AdminOrders() {
   const { orders, drivers, fetchOrders, updateOrderStatus } = useApp();
   const [tab,       setTab]       = useState('All');
-  const [period,    setPeriod]    = useState('today');   // 'today' | '7days'
+  const [period,    setPeriod]    = useState('today');   // 'today' | '7days' | 'all'
+  const [dateFrom,  setDateFrom]  = useState('');
+  const [dateTo,    setDateTo]    = useState('');
   const [selected,  setSelected]  = useState(null);
   const [assigning, setAssigning] = useState(false);
   const [allOrders, setAllOrders] = useState([]);
@@ -23,11 +25,16 @@ export default function AdminOrders() {
 
   // When switching to 7-day view, fetch all orders without date filter
   useEffect(() => {
-    if (period === '7days') {
+    if (period === '7days' || period === 'all') {
       setLoading7(true);
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      fetch('/api/orders?days=7')
+      let url = '/api/orders?';
+      if (period === '7days') url += 'days=7';
+      if (period === 'all') {
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo)   url += `&date_to=${dateTo}`;
+        if (!dateFrom && !dateTo) url += 'all=true';
+      }
+      fetch(url)
         .then(r => r.json())
         .then(data => {
           setAllOrders(data.map(o => ({
@@ -47,7 +54,7 @@ export default function AdminOrders() {
         .catch(console.error)
         .finally(() => setLoading7(false));
     }
-  }, [period]);
+  }, [period, dateFrom, dateTo]);
 
   const displayOrders = period === 'today' ? orders : allOrders;
 
@@ -113,19 +120,38 @@ export default function AdminOrders() {
       </div>
 
       {/* Period toggle */}
-      <div className="flex gap-2 mb-4 p-1 rounded-xl" style={{background:'var(--tn-warm)', width:'fit-content'}}>
-        {[['today','📅 Today'],['7days','📆 Last 7 days']].map(([val,label])=>(
-          <button key={val} onClick={()=>{ setPeriod(val); setTab('All'); }}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-            style={{
-              background: period===val ? 'white' : 'transparent',
-              color: period===val ? 'var(--tn-dark)' : 'var(--tn-gold)',
-              boxShadow: period===val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            }}>
-            {label}
-          </button>
-        ))}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex p-1 rounded-xl" style={{background:'var(--tn-warm)'}}>
+          {[['today','📅 Today'],['7days','📆 Last 7 days'],['all','📂 All orders']].map(([val,label])=>(
+            <button key={val} onClick={()=>{ setPeriod(val); setTab('All'); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: period===val ? 'white' : 'transparent',
+                color: period===val ? 'var(--tn-dark)' : 'var(--tn-gold)',
+                boxShadow: period===val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Date range filter for All orders */}
+      {period === 'all' && (
+        <div className="flex gap-2 mb-4 items-center flex-wrap">
+          <div>
+            <label className="label">From</label>
+            <input type="date" className="input text-sm" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{width:'140px'}}/>
+          </div>
+          <div>
+            <label className="label">To</label>
+            <input type="date" className="input text-sm" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:'140px'}}/>
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={()=>{setDateFrom('');setDateTo('');}} className="btn btn-outline btn-sm mt-4">Clear</button>
+          )}
+        </div>
+      )}
 
       {/* Status tabs */}
       <div className="flex gap-2 mb-4 flex-wrap">
