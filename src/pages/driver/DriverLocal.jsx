@@ -16,6 +16,7 @@ export default function DriverLocal() {
 
   const [orders,       setOrders]       = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [period,       setPeriod]       = useState('today');
   const [activeEnroute,setActiveEnroute]= useState(null);
   const [tab,          setTab]          = useState('orders');
   const [expanded,     setExpanded]     = useState(null);   // expanded order id
@@ -27,8 +28,10 @@ export default function DriverLocal() {
 
   const fetchMyOrders = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res   = await fetch(`/api/orders?driver_id=${driver}&date=${today}`);
+      const url = period === '7days'
+        ? `/api/orders?driver_id=${driver}&days=7`
+        : `/api/orders?driver_id=${driver}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setOrders(data.map(o => ({
@@ -63,9 +66,9 @@ export default function DriverLocal() {
 
   useEffect(() => {
     fetchMyOrders();
-    const iv = setInterval(fetchMyOrders, 30000);
-    return () => clearInterval(iv);
-  }, [driver]);
+    const iv = period === 'today' ? setInterval(fetchMyOrders, 30000) : null;
+    return () => { if (iv) clearInterval(iv); };
+  }, [driver, period]);
 
   const delivered = orders.filter(o => o.status === 'delivered').length;
 
@@ -132,6 +135,21 @@ export default function DriverLocal() {
               <div className="text-xl font-semibold" style={{color:s.color}}>{s.val}</div>
               <div className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{s.label}</div>
             </div>
+          ))}
+        </div>
+
+        {/* Period toggle */}
+        <div className="flex gap-1 mb-4 p-1 rounded-xl" style={{background:'var(--tn-warm)', width:'fit-content'}}>
+          {[['today','Today'],['7days','Last 7 days']].map(([val,label])=>(
+            <button key={val} onClick={()=>{ setPeriod(val); setLoading(true); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: period===val ? 'white' : 'transparent',
+                color: period===val ? 'var(--tn-dark)' : 'var(--tn-gold)',
+                boxShadow: period===val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}>
+              {label}
+            </button>
           ))}
         </div>
 
