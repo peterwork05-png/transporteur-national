@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CLIENTS, TPS, TVQ, CONTRACT_RATES } from '../../data/store';
+import { generateInvoicePDF } from '../../utils/generateInvoicePDF';
 
 const STATUS_BADGE = { paid:'badge-success', pending:'badge-warning', overdue:'badge-danger' };
 
 export default function AdminInvoices() {
-  const { invoices, addInvoice } = useApp();
+  const { invoices, addInvoice, clients } = useApp();
   const [tab, setTab] = useState('all');
   const [showNew, setShowNew] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -25,32 +26,38 @@ export default function AdminInvoices() {
     setForm(f => ({ ...f, invNum:f.invNum+1 }));
   };
 
+  const handleExportPDF = (inv) => {
+    const clientInfo = CLIENTS[inv.client] || clients?.find(c => c.id === inv.client) || { name: inv.client_name };
+    generateInvoicePDF(inv, clientInfo);
+  };
+
   const fmt = n => `$${parseFloat(n||0).toLocaleString('fr-CA',{minimumFractionDigits:2})}`;
   const TABS = [['all','All'],['pending','Pending'],['paid','Paid'],['overdue','Overdue']];
 
   const getClientName = (inv) => CLIENTS[inv.client]?.name || inv.client_name || inv.client || '—';
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Invoices</h1>
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Auto-sends weekly (contract) and bi-weekly (local)</p>
         </div>
-        <button onClick={() => setShowNew(true)} className="btn" style={{background:'var(--tn-red)',color:'white'}}>+ New invoice</button>
+        <button onClick={() => setShowNew(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ New</button>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         {TABS.map(([val,label]) => (
           <button key={val} onClick={() => setTab(val)}
-            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
             style={{background:tab===val?'var(--tn-red)':'white', color:tab===val?'white':'var(--tn-gold)', border:'0.5px solid var(--tn-border)'}}>
             {label}
           </button>
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Desktop table */}
+      <div className="card overflow-hidden hidden md:block">
         <table className="w-full">
           <thead>
             <tr style={{borderBottom:'0.5px solid var(--tn-border)'}}>
@@ -61,9 +68,8 @@ export default function AdminInvoices() {
           </thead>
           <tbody>
             {filtered.map((inv, i) => (
-              <tr key={inv.id}
-                onClick={() => setSelected(inv)}
-                className="cursor-pointer hover:opacity-80 transition-opacity"
+              <tr key={inv.id} onClick={() => setSelected(inv)}
+                className="cursor-pointer hover:opacity-80"
                 style={{borderBottom:'0.5px solid var(--tn-border)', background:i%2===0?'white':'var(--tn-cream)'}}>
                 <td className="px-4 py-3 font-mono text-sm font-semibold" style={{color:'var(--tn-red)'}}>#{inv.id}</td>
                 <td className="px-4 py-3">
@@ -75,9 +81,7 @@ export default function AdminInvoices() {
                 <td className="px-4 py-3 text-sm" style={{color:'var(--tn-gold)'}}>{inv.dates}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{fmt(inv.amount)}</td>
                 <td className="px-4 py-3">
-                  <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>
-                    {inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}
-                  </span>
+                  <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>{inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}</span>
                 </td>
                 <td className="px-4 py-3 text-xs font-mono" style={{color:'var(--tn-gold)'}}>{inv.eft?`EFT #${inv.eft}`:'—'}</td>
               </tr>
@@ -87,11 +91,36 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
+      {/* Mobile cards */}
+      <div className="space-y-2 md:hidden">
+        {filtered.length===0 && <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
+        {filtered.map(inv => (
+          <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => setSelected(inv)}>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
+                <p className="text-sm font-medium mt-0.5">{getClientName(inv)}</p>
+                <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{inv.dates}</p>
+              </div>
+              <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'} flex-shrink-0`}>
+                {inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+              <span className={`badge ${inv.type==='contract'?'badge-info':'badge-gray'}`}>
+                {inv.type==='contract'?`Contract · ${inv.route}`:'Local'}
+              </span>
+              <p className="font-semibold text-sm">{fmt(inv.amount)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Invoice detail modal */}
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{background:'var(--tn-dark)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
+            <div className="px-6 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
               <div>
                 <p className="font-mono text-xs" style={{color:'rgba(250,247,240,0.4)'}}>Invoice #{selected.id}</p>
                 <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Invoice details</p>
@@ -123,19 +152,17 @@ export default function AdminInvoices() {
                 )}
               </div>
 
-              {/* Totals breakdown */}
+              {/* Totals */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
                 {(() => {
                   const total = parseFloat(selected.amount||0);
                   const sub = total / (1 + TPS + TVQ);
-                  const tps = sub * TPS;
-                  const tvq = sub * TVQ;
                   return (
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span className="font-medium">{fmt(sub)}</span></div>
-                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TPS (5%)</span><span className="font-medium">{fmt(tps)}</span></div>
-                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TVQ (9.975%)</span><span className="font-medium">{fmt(tvq)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TPS (5%)</span><span className="font-medium">{fmt(sub*TPS)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TVQ (9.975%)</span><span className="font-medium">{fmt(sub*TVQ)}</span></div>
                       <div className="flex justify-between text-sm font-bold pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
                         <span>Total</span><span style={{color:'var(--tn-red)'}}>{fmt(total)}</span>
                       </div>
@@ -156,7 +183,9 @@ export default function AdminInvoices() {
 
               <div className="flex gap-2">
                 <button onClick={() => setSelected(null)} className="btn btn-outline flex-1 justify-center">Close</button>
-                <button className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>⬇ Export PDF</button>
+                <button onClick={() => handleExportPDF(selected)} className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                  ⬇ Export PDF
+                </button>
               </div>
             </div>
           </div>
@@ -166,7 +195,7 @@ export default function AdminInvoices() {
       {/* New invoice modal */}
       {showNew && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-md p-6" style={{background:'var(--tn-cream)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-lg">New invoice</h2>
               <button onClick={() => setShowNew(false)} className="text-xl leading-none" style={{color:'var(--tn-gold)'}}>×</button>
