@@ -1,61 +1,273 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
-const DRIVER_ROLES = { local:'Local deliveries', ontario:'Ontario / Gatineau route', quebec:'Québec route' };
+const ROLE_OPTIONS = [
+  { value: 'local',   label: 'Local deliveries' },
+  { value: 'ontario', label: 'Ontario / Gatineau route' },
+  { value: 'quebec',  label: 'Québec route' },
+];
+
+const DRIVER_COLORS = [
+  '#C0392B', '#7C3AED', '#8B4513', '#0F6E56',
+  '#185FA5', '#B45309', '#1F2937', '#BE185D',
+];
 
 export function AdminDrivers() {
-  const { orders, ontarioRoute, quebecRoute } = useApp();
-  const todayOrders = orders.filter(o => o.date === '2026-06-26');
+  const { orders, ontarioRoute, quebecRoute, drivers, fetchDrivers } = useApp();
+  const todayOrders = orders.filter(o => o.date?.split('T')[0] === new Date().toISOString().split('T')[0]);
 
-  const drivers = [
-    { id:'marc',    name:'Marc Dumont',       role:'local',   initials:'MD', color:'#C0392B', pin:'1111' },
-    { id:'peter',   name:'Peter',             role:'local',   initials:'PE', color:'#7C3AED', pin:'2222' },
-    { id:'jeanluc', name:'Jean-Luc Bergeron', role:'ontario', initials:'JL', color:'#8B4513', pin:'3333' },
-    { id:'pierre',  name:'Pierre Tremblay',   role:'quebec',  initials:'PT', color:'#0F6E56', pin:'4444' },
-  ];
+  const [editDriver, setEditDriver]   = useState(null);
+  const [showAdd,    setShowAdd]      = useState(false);
+  const [saving,     setSaving]       = useState(false);
+  const [showDelete, setShowDelete]   = useState(null);
 
-  const driverStats = {
-    marc:    `${todayOrders.filter(o=>o.driver==='marc'&&o.status==='delivered').length} delivered · ${todayOrders.filter(o=>o.driver==='marc'&&['picked','enroute'].includes(o.status)).length} active`,
-    peter:   `${todayOrders.filter(o=>o.driver==='peter'&&o.status==='delivered').length} delivered · ${todayOrders.filter(o=>o.driver==='peter'&&['picked','enroute'].includes(o.status)).length} active`,
-    jeanluc: `Ontario · ${ontarioRoute.stopStatus.filter(s=>s==='delivered').length}/15 stops`,
-    pierre:  `Québec · ${quebecRoute.stopStatus.filter(s=>s==='delivered').length}/10 stops`,
+  const [form, setForm] = useState({
+    name: '', role: 'local', pin: '', color: '#C0392B', initials: '',
+  });
+
+  const openEdit = (driver) => {
+    setForm({ name: driver.name, role: driver.role, pin: driver.pin, color: driver.color, initials: driver.initials });
+    setEditDriver(driver);
   };
 
+  const openAdd = () => {
+    setForm({ name: '', role: 'local', pin: '', color: '#185FA5', initials: '' });
+    setShowAdd(true);
+  };
+
+  const autoInitials = (name) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`/api/drivers/${editDriver.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          role: form.role,
+          pin: form.pin,
+          color: form.color,
+          initials: form.initials || autoInitials(form.name),
+        }),
+      });
+      await fetchDrivers();
+      setEditDriver(null);
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const handleAdd = async () => {
+    setSaving(true);
+    try {
+      const id = form.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+      await fetch('/api/drivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          name: form.name,
+          role: form.role,
+          pin: form.pin,
+          color: form.color,
+          initials: form.initials || autoInitials(form.name),
+        }),
+      });
+      await fetchDrivers();
+      setShowAdd(false);
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (driver) => {
+    setSaving(true);
+    try {
+      await fetch(`/api/drivers/${driver.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false }),
+      });
+      await fetchDrivers();
+      setShowDelete(null);
+    } catch (err) { console.error(err); }
+    setSaving(false);
+  };
+
+  const driverStats = (driver) => {
+    if (driver.role === 'local') {
+      const del = todayOrders.filter(o => o.driver_id === driver.id && o.status === 'delivered').length;
+      const act = todayOrders.filter(o => o.driver_id === driver.id && ['picked','enroute'].includes(o.status)).length;
+      return `Local deliveries · ${del} delivered · ${act} active`;
+    }
+    if (driver.role === 'ontario') return `Ontario / Gatineau route · Ontario · ${ontarioRoute.stopStatus.filter(s=>s==='delivered').length}/15 stops`;
+    if (driver.role === 'quebec')  return `Québec route · Québec · ${quebecRoute.stopStatus.filter(s=>s==='delivered').length}/10 stops`;
+    return driver.role;
+  };
+
+  const DriverForm = ({ title, onSave, onCancel, onDelete }) => (
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={onCancel}>
+      <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center justify-between" style={{background:'var(--tn-dark)'}}>
+          <p className="font-semibold" style={{color:'var(--tn-cream)'}}>{title}</p>
+          <button onClick={onCancel} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Preview avatar */}
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-md"
+              style={{background: form.color}}>
+              {form.initials || autoInitials(form.name) || '?'}
+            </div>
+          </div>
+
+          {/* Name */}
+          <div>
+            <label className="label">Full name</label>
+            <input className="input" placeholder="e.g. Marc Dumont" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value, initials: autoInitials(e.target.value) }))} />
+          </div>
+
+          {/* Initials override */}
+          <div>
+            <label className="label">Initials (auto-generated)</label>
+            <input className="input" placeholder="e.g. MD" maxLength={2} value={form.initials}
+              onChange={e => setForm(f => ({ ...f, initials: e.target.value.toUpperCase() }))} />
+          </div>
+
+          {/* Role */}
+          <div>
+            <label className="label">Route / Role</label>
+            <select className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+
+          {/* PIN */}
+          <div>
+            <label className="label">4-digit PIN</label>
+            <input className="input" type="password" placeholder="••••" maxLength={4}
+              value={form.pin} onChange={e => setForm(f => ({ ...f, pin: e.target.value }))} />
+            <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Driver uses this to log in</p>
+          </div>
+
+          {/* Color */}
+          <div>
+            <label className="label">Avatar color</label>
+            <div className="flex gap-2 flex-wrap">
+              {DRIVER_COLORS.map(color => (
+                <button key={color} onClick={() => setForm(f => ({ ...f, color }))}
+                  className="w-8 h-8 rounded-full transition-all"
+                  style={{
+                    background: color,
+                    outline: form.color === color ? `3px solid ${color}` : 'none',
+                    outlineOffset: '2px',
+                    transform: form.color === color ? 'scale(1.2)' : 'scale(1)',
+                  }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-2 pt-2">
+            <button onClick={onCancel} className="btn btn-outline flex-1 justify-center">Cancel</button>
+            {onDelete && (
+              <button onClick={onDelete} className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
+                🗑
+              </button>
+            )}
+            <button onClick={onSave} disabled={!form.name || !form.pin || saving}
+              className="btn flex-1 justify-center"
+              style={{background:'var(--tn-red)',color:'white',opacity:(!form.name||!form.pin||saving)?0.5:1}}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Drivers</h1>
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Manage drivers and PIN codes</p>
         </div>
-        <button className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add driver</button>
+        <button onClick={openAdd} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add driver</button>
       </div>
+
       <div className="card max-w-2xl overflow-hidden">
-        {drivers.map((driver, i) => (
+        {(drivers || []).map((driver, i) => (
           <div key={driver.id} className="flex items-center gap-4 p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{background:driver.color}}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+              style={{background: driver.color}}>
               {driver.initials}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="font-medium text-sm">{driver.name}</p>
-              <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{DRIVER_ROLES[driver.role]} · {driverStats[driver.id]}</p>
+              <p className="text-xs mt-0.5 truncate" style={{color:'var(--tn-gold)'}}>{driverStats(driver)}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-lg font-mono" style={{background:'var(--tn-warm)',color:'var(--tn-gold)'}}>PIN: {driver.pin}</span>
-              <button className="btn btn-outline btn-sm">Edit</button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-xs px-2 py-1 rounded-lg font-mono" style={{background:'var(--tn-warm)',color:'var(--tn-gold)'}}>
+                PIN: {driver.pin}
+              </span>
+              <button onClick={() => openEdit(driver)} className="btn btn-outline btn-sm">Edit</button>
             </div>
           </div>
         ))}
+        {(!drivers || drivers.length === 0) && (
+          <div className="text-center py-8 text-sm" style={{color:'var(--tn-gold)'}}>No drivers found</div>
+        )}
       </div>
+
+      {/* Edit modal */}
+      {editDriver && (
+        <DriverForm
+          title={`Edit — ${editDriver.name}`}
+          onSave={handleSave}
+          onCancel={() => setEditDriver(null)}
+          onDelete={() => setShowDelete(editDriver)}
+        />
+      )}
+
+      {/* Add modal */}
+      {showAdd && (
+        <DriverForm
+          title="Add new driver"
+          onSave={handleAdd}
+          onCancel={() => setShowAdd(false)}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {showDelete && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{background:'var(--tn-cream)'}}>
+            <p className="font-semibold text-lg mb-2">Remove driver?</p>
+            <p className="text-sm mb-6" style={{color:'var(--tn-gold)'}}>
+              This will remove <strong>{showDelete.name}</strong> from the system. Their past orders will be kept.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowDelete(null)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+              <button onClick={() => handleDelete(showDelete)} disabled={saving}
+                className="btn flex-1 justify-center" style={{background:'#991B1B',color:'white'}}>
+                {saving ? 'Removing...' : 'Remove driver'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export function AdminSettings() {
   const [clients, setClients] = useState([
-    { id:'beg',     name:'Bureau en Gros #299',  email:'beg@staples.ca',       password:'staples2026',  active:true },
-    { id:'jonarts', name:'Jonarts Printing',      email:'orders@jonarts.ca',    password:'jonarts2026',  active:true },
-    { id:'aebath',  name:'A&E Bath and Shower',   email:'aebath@gmail.com',     password:'aebath2026',   active:true },
+    { id:'beg',     name:'Bureau en Gros #299',  email:'beg@staples.ca',    password:'staples2026',  active:true },
+    { id:'jonarts', name:'Jonarts Printing',      email:'orders@jonarts.ca', password:'jonarts2026',  active:true },
+    { id:'aebath',  name:'A&E Bath and Shower',   email:'aebath@gmail.com',  password:'aebath2026',   active:true },
   ]);
   const [showAdd, setShowAdd] = useState(false);
   const [newClient, setNewClient] = useState({ name:'', email:'', password:'' });
@@ -70,7 +282,7 @@ export function AdminSettings() {
   ];
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="p-4 md:p-6 space-y-6 max-w-2xl">
       <div>
         <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Settings</h1>
         <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Admin users, client logins & preferences</p>
@@ -123,8 +335,6 @@ export function AdminSettings() {
             </div>
           </div>
         ))}
-
-        {/* Add client form */}
         {showAdd && (
           <div className="p-4" style={{background:'var(--tn-warm)'}}>
             <p className="font-medium text-sm mb-3">New client login</p>
