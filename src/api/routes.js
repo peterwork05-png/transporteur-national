@@ -18,7 +18,7 @@ router.delete('/orders/clean', async (req, res) => {
 // Get all orders
 router.get('/orders', async (req, res) => {
   try {
-    const { date, driver_id, client_id } = req.query;
+    const { date, driver_id, client_id, days } = req.query;
     let query = `
       SELECT o.*,
              c.name as client_name, c.address as client_address,
@@ -30,7 +30,15 @@ router.get('/orders', async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
-    if (date)      { params.push(date);      query += ` AND o.date = $${params.length}`; }
+    if (days) {
+      params.push(parseInt(days));
+      query += ` AND o.date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'`;
+    } else if (date) {
+      params.push(date);
+      query += ` AND o.date = $${params.length}`;
+    } else {
+      query += ` AND o.date = CURRENT_DATE`;
+    }
     if (driver_id) { params.push(driver_id); query += ` AND o.driver_id = $${params.length}`; }
     if (client_id) { params.push(client_id); query += ` AND o.client_id = $${params.length}`; }
     query += ' ORDER BY o.created_at DESC';
