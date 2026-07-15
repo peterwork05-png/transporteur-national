@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 
 const ROLE_OPTIONS = [
@@ -12,160 +12,84 @@ const DRIVER_COLORS = [
   '#185FA5', '#B45309', '#1F2937', '#BE185D',
 ];
 
-const autoInitials = (name) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-
-// Defined OUTSIDE AdminDrivers to prevent re-creation on every keystroke
-function DriverForm({ title, form, setForm, saving, onSave, onCancel, onDelete }) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={onCancel}>
-      <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
-        <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
-          <p className="font-semibold" style={{color:'var(--tn-cream)'}}>{title}</p>
-          <button onClick={onCancel} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Preview avatar */}
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-md"
-              style={{background: form.color}}>
-              {form.initials || autoInitials(form.name) || '?'}
-            </div>
-          </div>
-
-          <div>
-            <label className="label">Full name</label>
-            <input className="input" placeholder="e.g. Marc Dumont" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value, initials: autoInitials(e.target.value) }))} />
-          </div>
-
-          <div>
-            <label className="label">Initials (editable)</label>
-            <input className="input" placeholder="e.g. MD" maxLength={2} value={form.initials}
-              onChange={e => setForm(f => ({ ...f, initials: e.target.value.toUpperCase() }))} />
-          </div>
-
-          <div>
-            <label className="label">Route / Role</label>
-            <select className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="label">4-digit PIN</label>
-            <input className="input" type="number" placeholder="e.g. 1234" maxLength={4}
-              value={form.pin} onChange={e => setForm(f => ({ ...f, pin: e.target.value.slice(0,4) }))} />
-            <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Driver uses this to log in</p>
-          </div>
-
-          <div>
-            <label className="label">Avatar color</label>
-            <div className="flex gap-2 flex-wrap">
-              {DRIVER_COLORS.map(color => (
-                <button key={color} onClick={() => setForm(f => ({ ...f, color }))}
-                  className="w-8 h-8 rounded-full transition-all"
-                  style={{
-                    background: color,
-                    outline: form.color === color ? `3px solid ${color}` : 'none',
-                    outlineOffset: '2px',
-                    transform: form.color === color ? 'scale(1.2)' : 'scale(1)',
-                  }} />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button onClick={onCancel} className="btn btn-outline flex-1 justify-center">Cancel</button>
-            {onDelete && (
-              <button onClick={onDelete} className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>🗑</button>
-            )}
-            <button onClick={onSave} disabled={!form.name || !form.pin || saving}
-              className="btn flex-1 justify-center"
-              style={{background:'var(--tn-red)',color:'white',opacity:(!form.name||!form.pin||saving)?0.5:1}}>
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const autoInitials = (name) =>
+  name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
 export function AdminDrivers() {
   const { orders, ontarioRoute, quebecRoute, drivers, fetchDrivers } = useApp();
-  const todayOrders = orders.filter(o => o.date?.split('T')[0] === new Date().toISOString().split('T')[0]);
+  const todayDate = new Date().toISOString().split('T')[0];
+  const todayOrders = orders.filter(o => o.date?.split('T')[0] === todayDate);
 
-  const [editDriver, setEditDriver]   = useState(null);
-  const [showAdd,    setShowAdd]      = useState(false);
-  const [saving,     setSaving]       = useState(false);
-  const [showDelete, setShowDelete]   = useState(null);
+  const [mode,       setMode]       = useState(null); // null | 'edit' | 'add'
+  const [editTarget, setEditTarget] = useState(null);
+  const [saving,     setSaving]     = useState(false);
+  const [showDelete, setShowDelete] = useState(null);
 
-  const [form, setForm] = useState({
-    name: '', role: 'local', pin: '', color: '#C0392B', initials: '',
-  });
+  const [name,     setName]     = useState('');
+  const [initials, setInitials] = useState('');
+  const [role,     setRole]     = useState('local');
+  const [pin,      setPin]      = useState('');
+  const [color,    setColor]    = useState('#C0392B');
 
-  const openEdit = (driver) => {
-    setForm({ name: driver.name, role: driver.role, pin: driver.pin, color: driver.color, initials: driver.initials });
-    setEditDriver(driver);
-  };
+  const openEdit = useCallback((driver) => {
+    setName(driver.name);
+    setInitials(driver.initials || autoInitials(driver.name));
+    setRole(driver.role);
+    setPin(driver.pin);
+    setColor(driver.color);
+    setEditTarget(driver);
+    setMode('edit');
+  }, []);
 
-  const openAdd = () => {
-    setForm({ name: '', role: 'local', pin: '', color: '#185FA5', initials: '' });
-    setShowAdd(true);
-  };
+  const openAdd = useCallback(() => {
+    setName(''); setInitials(''); setRole('local'); setPin(''); setColor('#185FA5');
+    setEditTarget(null);
+    setMode('add');
+  }, []);
+
+  const closeModal = useCallback(() => { setMode(null); setEditTarget(null); }, []);
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch(`/api/drivers/${editDriver.id}`, {
+      await fetch(`/api/drivers/${editTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          role: form.role,
-          pin: form.pin,
-          color: form.color,
-          initials: form.initials || autoInitials(form.name),
-        }),
+        body: JSON.stringify({ name, role, pin, color, initials: initials || autoInitials(name) }),
       });
       await fetchDrivers();
-      setEditDriver(null);
-    } catch (err) { console.error(err); }
+      closeModal();
+    } catch (e) { console.error(e); }
     setSaving(false);
   };
 
   const handleAdd = async () => {
     setSaving(true);
     try {
-      const id = form.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+      const id = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
       await fetch('/api/drivers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id,
-          name: form.name,
-          role: form.role,
-          pin: form.pin,
-          color: form.color,
-          initials: form.initials || autoInitials(form.name),
-        }),
+        body: JSON.stringify({ id, name, role, pin, color, initials: initials || autoInitials(name) }),
       });
       await fetchDrivers();
-      setShowAdd(false);
-    } catch (err) { console.error(err); }
+      closeModal();
+    } catch (e) { console.error(e); }
     setSaving(false);
   };
 
-  const handleDelete = async (driver) => {
+  const handleDelete = async () => {
     setSaving(true);
     try {
-      await fetch(`/api/drivers/${driver.id}`, {
+      await fetch(`/api/drivers/${showDelete.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: false }),
       });
       await fetchDrivers();
       setShowDelete(null);
-    } catch (err) { console.error(err); }
+      closeModal();
+    } catch (e) { console.error(e); }
     setSaving(false);
   };
 
@@ -173,12 +97,15 @@ export function AdminDrivers() {
     if (driver.role === 'local') {
       const del = todayOrders.filter(o => o.driver_id === driver.id && o.status === 'delivered').length;
       const act = todayOrders.filter(o => o.driver_id === driver.id && ['picked','enroute'].includes(o.status)).length;
-      return `Local deliveries · ${del} delivered · ${act} active`;
+      return `Local · ${del} delivered · ${act} active today`;
     }
-    if (driver.role === 'ontario') return `Ontario / Gatineau route · Ontario · ${ontarioRoute.stopStatus.filter(s=>s==='delivered').length}/15 stops`;
-    if (driver.role === 'quebec')  return `Québec route · Québec · ${quebecRoute.stopStatus.filter(s=>s==='delivered').length}/10 stops`;
+    if (driver.role === 'ontario') return `Ontario / Gatineau · ${ontarioRoute.stopStatus.filter(s=>s==='delivered').length}/15 stops`;
+    if (driver.role === 'quebec')  return `Québec route · ${quebecRoute.stopStatus.filter(s=>s==='delivered').length}/10 stops`;
     return driver.role;
   };
+
+  const isOpen = mode === 'edit' || mode === 'add';
+  const canSave = name.trim() && pin.trim() && !saving;
 
   return (
     <div className="p-4 md:p-6">
@@ -191,7 +118,7 @@ export function AdminDrivers() {
       </div>
 
       <div className="card max-w-2xl overflow-hidden">
-        {(drivers || []).map((driver, i) => (
+        {(drivers || []).map(driver => (
           <div key={driver.id} className="flex items-center gap-4 p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
               style={{background: driver.color}}>
@@ -214,25 +141,112 @@ export function AdminDrivers() {
         )}
       </div>
 
-      {/* Edit modal */}
-      {editDriver && (
-        <DriverForm
-          title={`Edit — ${editDriver.name}`}
-          form={form} setForm={setForm} saving={saving}
-          onSave={handleSave}
-          onCancel={() => setEditDriver(null)}
-          onDelete={() => setShowDelete(editDriver)}
-        />
-      )}
+      {/* Edit / Add modal — inline JSX, no sub-component */}
+      {isOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={closeModal}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto"
+            style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
 
-      {/* Add modal */}
-      {showAdd && (
-        <DriverForm
-          title="Add new driver"
-          form={form} setForm={setForm} saving={saving}
-          onSave={handleAdd}
-          onCancel={() => setShowAdd(false)}
-        />
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>
+                {mode === 'edit' ? `Edit — ${editTarget?.name}` : 'Add new driver'}
+              </p>
+              <button onClick={closeModal} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Avatar preview */}
+              <div className="flex justify-center">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-md"
+                  style={{background: color}}>
+                  {initials || autoInitials(name) || '?'}
+                </div>
+              </div>
+
+              {/* Name */}
+              <div>
+                <label className="label">Full name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Marc Dumont"
+                  value={name}
+                  onChange={e => {
+                    setName(e.target.value);
+                    setInitials(autoInitials(e.target.value));
+                  }}
+                />
+              </div>
+
+              {/* Initials */}
+              <div>
+                <label className="label">Initials</label>
+                <input
+                  className="input"
+                  placeholder="e.g. MD"
+                  maxLength={2}
+                  value={initials}
+                  onChange={e => setInitials(e.target.value.toUpperCase())}
+                />
+              </div>
+
+              {/* Role */}
+              <div>
+                <label className="label">Route / Role</label>
+                <select className="input" value={role} onChange={e => setRole(e.target.value)}>
+                  {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+
+              {/* PIN */}
+              <div>
+                <label className="label">4-digit PIN</label>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="e.g. 1234"
+                  value={pin}
+                  onChange={e => setPin(e.target.value.slice(0, 4))}
+                />
+                <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Driver uses this to log in</p>
+              </div>
+
+              {/* Color */}
+              <div>
+                <label className="label">Avatar color</label>
+                <div className="flex gap-2 flex-wrap">
+                  {DRIVER_COLORS.map(c => (
+                    <button key={c} onClick={() => setColor(c)}
+                      className="w-8 h-8 rounded-full transition-all"
+                      style={{
+                        background: c,
+                        outline: color === c ? `3px solid ${c}` : 'none',
+                        outlineOffset: '2px',
+                        transform: color === c ? 'scale(1.2)' : 'scale(1)',
+                      }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button onClick={closeModal} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                {mode === 'edit' && (
+                  <button onClick={() => setShowDelete(editTarget)}
+                    className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
+                    🗑
+                  </button>
+                )}
+                <button
+                  onClick={mode === 'edit' ? handleSave : handleAdd}
+                  disabled={!canSave}
+                  className="btn flex-1 justify-center"
+                  style={{background:'var(--tn-red)',color:'white',opacity:canSave?1:0.5}}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete confirmation */}
@@ -245,7 +259,7 @@ export function AdminDrivers() {
             </p>
             <div className="flex gap-2">
               <button onClick={() => setShowDelete(null)} className="btn btn-outline flex-1 justify-center">Cancel</button>
-              <button onClick={() => handleDelete(showDelete)} disabled={saving}
+              <button onClick={handleDelete} disabled={saving}
                 className="btn flex-1 justify-center" style={{background:'#991B1B',color:'white'}}>
                 {saving ? 'Removing...' : 'Remove driver'}
               </button>
@@ -266,7 +280,6 @@ export function AdminSettings() {
   const [showAdd, setShowAdd] = useState(false);
   const [newClient, setNewClient] = useState({ name:'', email:'', password:'' });
   const [showPasswords, setShowPasswords] = useState({});
-
   const togglePass = (id) => setShowPasswords(p => ({...p, [id]: !p[id]}));
 
   const admins = [
@@ -282,7 +295,6 @@ export function AdminSettings() {
         <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Admin users, client logins & preferences</p>
       </div>
 
-      {/* Admin PIN */}
       <div className="card p-4">
         <h2 className="font-semibold text-sm mb-3">Admin PIN</h2>
         <div className="flex items-center justify-between p-3 rounded-xl" style={{background:'var(--tn-warm)'}}>
@@ -297,7 +309,6 @@ export function AdminSettings() {
         </div>
       </div>
 
-      {/* Client logins */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
           <h2 className="font-semibold text-sm">Client portal logins</h2>
@@ -333,9 +344,12 @@ export function AdminSettings() {
           <div className="p-4" style={{background:'var(--tn-warm)'}}>
             <p className="font-medium text-sm mb-3">New client login</p>
             <div className="space-y-2">
-              <div><label className="label">Client name</label><input className="input" placeholder="e.g. New Client Inc." value={newClient.name} onChange={e=>setNewClient(c=>({...c,name:e.target.value}))} /></div>
-              <div><label className="label">Email</label><input type="email" className="input" placeholder="client@company.com" value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
-              <div><label className="label">Password</label><input className="input" placeholder="Set a password" value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
+              <div><label className="label">Client name</label>
+                <input className="input" placeholder="e.g. New Client Inc." value={newClient.name} onChange={e=>setNewClient(c=>({...c,name:e.target.value}))} /></div>
+              <div><label className="label">Email</label>
+                <input type="email" className="input" placeholder="client@company.com" value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
+              <div><label className="label">Password</label>
+                <input className="input" placeholder="Set a password" value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
             </div>
             <div className="flex gap-2 mt-3">
               <button onClick={() => setShowAdd(false)} className="btn btn-outline btn-sm flex-1 justify-center">Cancel</button>
@@ -353,7 +367,6 @@ export function AdminSettings() {
         )}
       </div>
 
-      {/* Admin users */}
       <div className="card overflow-hidden">
         <div className="p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
           <h2 className="font-semibold text-sm">Admin users</h2>
