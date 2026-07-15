@@ -17,7 +17,31 @@
 }
 
 @layer base {
-  body { @apply font-sans; background: var(--tn-cream); color: var(--tn-dark); }
+  * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+  html {
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans;
+    background: var(--tn-cream);
+    color: var(--tn-dark);
+    /* Prevent horizontal overflow */
+    overflow-x: hidden;
+    /* Fix iOS momentum scrolling */
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Make sure nothing bleeds past viewport */
+  #root {
+    overflow-x: hidden;
+    min-height: 100vh;
+    min-height: 100dvh; /* dynamic viewport height for mobile browsers */
+  }
 }
 
 @layer components {
@@ -49,7 +73,6 @@
   .input:focus { --tw-ring-color: var(--tn-red); border-color: var(--tn-red); }
 
   .label { @apply block text-xs font-medium mb-1; color: var(--tn-gold); }
-
   .section-title { @apply text-sm font-medium mb-3; color: var(--tn-dark); }
 
   /* Sidebar nav */
@@ -62,4 +85,40 @@
   .progress-fill-red  { background: var(--tn-red); @apply h-full rounded-full transition-all; }
   .progress-fill-gold { background: var(--tn-gold); @apply h-full rounded-full transition-all; }
   .progress-fill-green { @apply h-full rounded-full transition-all bg-emerald-600; }
+
+  /* Mobile safe scrolling for page content */
+  .mobile-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    /* Add padding at bottom for mobile browser bars */
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  /* Fix modal content on mobile */
+  .modal-scroll {
+    overflow-y: auto;
+    max-height: 85vh;
+    max-height: 85dvh;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Ensure tables don't cause horizontal scroll on mobile */
+@media (max-width: 768px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent any element from exceeding viewport */
+  .card, .rounded-xl, .rounded-2xl {
+    max-width: 100%;
+  }
+
+  /* Fix bottom content cutoff on iOS Safari */
+  main {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
 }
