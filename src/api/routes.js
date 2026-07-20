@@ -443,3 +443,23 @@ router.get('/stats/today', async (req, res) => {
 });
 
 export default router;
+
+// ── GMAIL AUTO-MATCHING ───────────────────────────────────
+
+router.post('/gmail/check', async (req, res) => {
+  try {
+    const { checkGmailRemittances } = await import('./gmail.js');
+    const results = await checkGmailRemittances();
+    res.json(results);
+  } catch (err) {
+    console.error('Gmail check error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/gmail/status', async (req, res) => {
+  res.json({
+    configured: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+    email: process.env.GMAIL_USER || null,
+  });
+});
