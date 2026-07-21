@@ -108,28 +108,39 @@ export default function AdminLayout() {
 
         {/* Mobile top bar */}
         <div className="flex md:hidden items-center justify-between flex-shrink-0"
-          style={{background:'var(--tn-dark)', borderBottom:'0.5px solid rgba(139,105,20,0.2)', padding:'12px 16px', minHeight:'56px'}}>
+          style={{
+            background:'var(--tn-dark)',
+            borderBottom:'0.5px solid rgba(139,105,20,0.2)',
+            padding:'12px 16px',
+            paddingTop: 'max(12px, env(safe-area-inset-top))',
+            minHeight:'56px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 40,
+          }}>
 
           {/* Hamburger — big tap target */}
           <button
             onClick={() => setMobileOpen(true)}
             style={{
-              width: '44px',
-              height: '44px',
+              width: '48px',
+              height: '48px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '5px',
-              background: 'rgba(250,247,240,0.08)',
-              borderRadius: '10px',
-              border: '0.5px solid rgba(139,105,20,0.2)',
+              background: 'rgba(250,247,240,0.1)',
+              borderRadius: '12px',
+              border: '0.5px solid rgba(139,105,20,0.3)',
               cursor: 'pointer',
               flexShrink: 0,
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation',
             }}>
-            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
-            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
-            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
+            <span style={{display:'block', width:'20px', height:'2px', background:'white', borderRadius:'2px'}} />
+            <span style={{display:'block', width:'20px', height:'2px', background:'white', borderRadius:'2px'}} />
+            <span style={{display:'block', width:'20px', height:'2px', background:'white', borderRadius:'2px'}} />
           </button>
 
           {/* Page title */}
@@ -148,7 +159,7 @@ export default function AdminLayout() {
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto" style={{background:'var(--tn-cream)'}}>
+        <main className="flex-1 overflow-auto" style={{background:'var(--tn-cream)', paddingBottom:'env(safe-area-inset-bottom)'}}>
           <Outlet />
         </main>
       </div>
