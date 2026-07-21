@@ -646,3 +646,108 @@ router.post('/import/woocommerce', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── CLIENT PORTAL SETUP ───────────────────────────────────
+
+router.post('/setup/clients', async (req, res) => {
+  try {
+    // Add role column if not exists
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'ops'`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS password VARCHAR(100)`);
+
+    const clients = [
+      // Jonarts
+      { id:'jonarts_ops',     name:'Jonarts Printing',     email:'tanya@jonarts.com',          password:'jonarts2026', role:'ops',     clientGroup:'jonarts' },
+      { id:'jonarts_finance', name:'Jonarts Printing',     email:'accounting@jonarts.com',      password:'jonarts2026', role:'finance', clientGroup:'jonarts' },
+      // Bureau en Gros
+      { id:'beg_ops',         name:'Bureau en Gros #299',  email:'s299pc@staples.com',          password:'staples2026', role:'ops',     clientGroup:'beg' },
+      { id:'beg_finance1',    name:'Bureau en Gros #299',  email:'yves.courteau@staples.ca',    password:'staples2026', role:'finance', clientGroup:'beg' },
+      { id:'beg_finance2',    name:'Bureau en Gros #299',  email:'lise.fortin@staples.ca',      password:'staples2026', role:'finance', clientGroup:'beg' },
+      // A&E Bath
+      { id:'aebath_finance1', name:'A&E Bath and Shower',  email:'accounting@aebath.com',       password:'aebath2026',  role:'finance', clientGroup:'aebath' },
+      { id:'aebath_finance2', name:'A&E Bath and Shower',  email:'nicolas@aebath.com',          password:'aebath2026',  role:'finance', clientGroup:'aebath' },
+    ];
+
+    for (const c of clients) {
+      await pool.query(`
+        INSERT INTO clients (id, name, email, password, role, language, signoff, active)
+        VALUES ($1, $2, $3, $4, $5, 'fr', 'MERCI DE VOTRE CONFIANCE!', true)
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          password = EXCLUDED.password,
+          role = EXCLUDED.role,
+          name = EXCLUDED.name
+      `, [c.id, c.name, c.email, c.password, c.role]);
+    }
+
+    // Add client_group column to link logins to the same company
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_group VARCHAR(50)`);
+    for (const c of clients) {
+      await pool.query(`UPDATE clients SET client_group = $1 WHERE id = $2`, [c.clientGroup, c.id]);
+    }
+
+    res.json({ success: true, message: `${clients.length} client logins configured` });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Updated client login — returns role and client_group
+router.post('/auth/client-login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const { rows } = await pool.query(
+      `SELECT id, name, email, role, client_group, language, signoff 
+       FROM clients 
+       WHERE LOWER(email) = LOWER($1) AND password = $2 AND active = true`,
+      [email, password]
+    );
+    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    res.json({ success: true, client: rows[0] });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get orders for a client group
+router.get('/client/orders', async (req, res) => {
+  try {
+    const { client_group, period } = req.query;
+    let dateFilter = '';
+    if (period === 'today')  dateFilter = `AND o.date = CURRENT_DATE`;
+    if (period === '7days')  dateFilter = `AND o.date >= CURRENT_DATE - INTERVAL '7 days'`;
+    if (period === 'month')  dateFilter = `AND o.date >= DATE_TRUNC('month', CURRENT_DATE)`;
+
+    const { rows } = await pool.query(`
+      SELECT o.*, d.name as driver_name, d.color as driver_color, d.initials as driver_initials
+      FROM orders o
+      LEFT JOIN drivers d ON o.driver_id = d.id
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE c.client_group = $1 ${dateFilter}
+      ORDER BY o.date DESC, o.created_at DESC
+    `, [client_group]);
+    res.json(rows);
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get invoices for a client group
+router.get('/client/invoices', async (req, res) => {
+  try {
+    const { client_group, status } = req.query;
+    let statusFilter = '';
+    if (status && status !== 'all') statusFilter = `AND i.status = '${status}'`;
+
+    const { rows } = await pool.query(`
+      SELECT i.*, c.name as client_name
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE c.client_group = $1 ${statusFilter}
+      ORDER BY i.created_at DESC
+    `, [client_group]);
+    res.json(rows);
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
