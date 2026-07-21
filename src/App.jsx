@@ -7,6 +7,7 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminRoutes from './pages/admin/AdminRoutes';
 import AdminInvoices from './pages/admin/AdminInvoices';
 import AdminPayments from './pages/admin/AdminPayments';
+import AdminImport from './pages/admin/AdminImport';
 import { AdminDrivers, AdminSettings } from './pages/admin/AdminMisc';
 import DriverLocal from './pages/driver/DriverLocal';
 import DriverRoute from './pages/driver/DriverRoute';
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="payments" element={<AdminPayments />} />
             <Route path="drivers" element={<AdminDrivers />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="import" element={<AdminImport />} />
           </Route>
           <Route path="/driver/local/:driverId" element={<DriverLocal />} />
           <Route path="/driver/local" element={<DriverLocal />} />
