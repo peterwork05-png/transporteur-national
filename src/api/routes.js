@@ -463,3 +463,186 @@ router.get('/gmail/status', async (req, res) => {
     email: process.env.GMAIL_USER || null,
   });
 });
+// ── WOOCOMMERCE IMPORT ────────────────────────────────────
+
+router.post('/import/woocommerce', async (req, res) => {
+  try {
+    const { month, year } = req.body;
+    const targetMonth = month || new Date().getMonth() + 1;
+    const targetYear  = year  || new Date().getFullYear();
+
+    const WC_URL     = 'https://transporteurnationalmc.com/wp-json/wc/v3';
+    const WC_KEY     = 'ck_dbc25f00ebbcd23ae64695dbc38145ad50fd65a9';
+    const WC_SECRET  = 'cs_ee1eaa98cacd62619dd0e67f2c719a848ae864c6';
+    const auth       = Buffer.from(`${WC_KEY}:${WC_SECRET}`).toString('base64');
+
+    // Date range for the month
+    const dateMin = `${targetYear}-${String(targetMonth).padStart(2,'0')}-01T00:00:00`;
+    const dateMax = `${targetYear}-${String(targetMonth).padStart(2,'0')}-31T23:59:59`;
+
+    console.log(`📦 Importing WooCommerce orders for ${targetMonth}/${targetYear}...`);
+
+    let allOrders = [];
+    let page = 1;
+    let hasMore = true;
+
+    // Fetch all pages
+    while (hasMore) {
+      const url = `${WC_URL}/orders?after=${dateMin}&before=${dateMax}&per_page=100&page=${page}&status=any`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(400).json({ error: `WooCommerce API error: ${err}` });
+      }
+
+      const orders = await response.json();
+      if (orders.length === 0) { hasMore = false; break; }
+      allOrders = [...allOrders, ...orders];
+      page++;
+      if (orders.length < 100) hasMore = false;
+    }
+
+    console.log(`📦 Found ${allOrders.length} orders to import`);
+
+    let imported = 0, skipped = 0, errors = 0;
+    const results = [];
+
+    // Ensure columns exist
+    try {
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_email VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_phone VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location TEXT`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_associate_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_associate_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_name VARCHAR(100)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_phone VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS po_number VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requested_delivery_time VARCHAR(20)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_number VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS type_boite VARCHAR(50)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_dropoff_date VARCHAR(20)`);
+      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_pickup_date VARCHAR(20)`);
+    } catch(e) {}
+
+    for (const order of allOrders) {
+      try {
+        const wcOrderId = order.id;
+        const orderId   = `DEL-${targetYear}-${String(wcOrderId).padStart(4,'0')}`;
+
+        // Extract meta_data custom fields
+        const meta = {};
+        if (order.meta_data) {
+          order.meta_data.forEach(m => { meta[m.key] = m.value; });
+        }
+
+        const billing  = order.billing  || {};
+        const shipping = order.shipping || {};
+
+        // Delivery address — prefer To_dropoff_location
+        const dropoff = meta['To_dropoff_location'] || '';
+        const shippingAddr = [shipping.address_1, shipping.city, shipping.state].filter(Boolean).join(', ');
+        const billingAddr  = [billing.address_1,  billing.city,  billing.state].filter(Boolean).join(', ');
+        const address = dropoff || shippingAddr || billingAddr || 'Address pending';
+
+        const amount   = parseFloat(meta['Ville_prix'] || order.total || 0);
+        const boxes    = parseInt(meta['Quantite'] || '1') || 1;
+        const notes    = meta['Delivery_order_notes'] || order.customer_note || '';
+        const storeNum = meta['Store_number'] || '';
+        const poNum    = meta['Po_number']    || '';
+        const typeBoite= meta['Type_boite']   || '';
+        const toTime   = meta['To_delivered_time'] || '';
+        const toDate   = meta['To_dropoff_date']   || '';
+        const fromDate = meta['From_pickup_date']   || '';
+        const fromName = meta['From_associate_name']|| '';
+        const fromPhone= meta['From_associate_phone']|| '';
+        const toName   = meta['To_associate_name'] || '';
+        const toBiz    = meta['To_business_name']  || '';
+        const toBizPh  = meta['To_business_phone'] || '';
+        const pickupLoc= meta['From_pickup_location'] || '';
+
+        const billingName  = `${billing.first_name||''} ${billing.last_name||''}`.trim() || billing.company || '';
+        const billingEmail = meta['Email'] || billing.email || '';
+        const billingPhone = fromPhone || billing.phone || '';
+
+        // Order date
+        const orderDate = order.date_created
+          ? order.date_created.split('T')[0]
+          : new Date().toISOString().split('T')[0];
+
+        // Map WC status to our status
+        const statusMap = {
+          'completed':  'delivered',
+          'processing': 'waiting',
+          'pending':    'waiting',
+          'on-hold':    'waiting',
+          'cancelled':  'waiting',
+          'refunded':   'waiting',
+        };
+        const status = statusMap[order.status] || 'waiting';
+
+        // Match client by store number first, then email
+        let clientId = null;
+        if (storeNum) {
+          const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${storeNum}%`]);
+          if (rows.length > 0) clientId = rows[0].id;
+        }
+        if (!clientId && billingEmail) {
+          const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [billingEmail]);
+          if (rows.length > 0) clientId = rows[0].id;
+        }
+        if (!clientId) {
+          const clientName = toBiz || billing.company || billingName || billingEmail || 'New Client';
+          const newClientId = `client_wc_${wcOrderId}`;
+          await pool.query(`
+            INSERT INTO clients (id, name, address, email, language, signoff)
+            VALUES ($1, $2, $3, $4, 'fr', 'MERCI DE VOTRE CONFIANCE!')
+            ON CONFLICT (id) DO NOTHING
+          `, [newClientId, clientName, address, billingEmail]);
+          clientId = newClientId;
+        }
+
+        // Insert order — skip if already exists
+        const { rows } = await pool.query(`
+          INSERT INTO orders (
+            id, client_id, address, boxes, amount, status, date, notes,
+            billing_name, billing_email, billing_phone, pickup_location,
+            from_associate_name, to_associate_name, to_business_name, to_business_phone,
+            po_number, requested_delivery_time, store_number, type_boite,
+            to_dropoff_date, from_pickup_date
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+          )
+          ON CONFLICT (id) DO NOTHING
+          RETURNING id
+        `, [
+          orderId, clientId, address, boxes, amount, status, orderDate, notes,
+          billingName, billingEmail, billingPhone, pickupLoc,
+          fromName, toName, toBiz, toBizPh,
+          poNum, toTime, storeNum, typeBoite,
+          toDate, fromDate
+        ]);
+
+        if (rows.length > 0) {
+          imported++;
+          results.push({ id: orderId, status, address, amount });
+        } else {
+          skipped++;
+        }
+      } catch(e) {
+        console.error(`Error importing order ${order.id}:`, e.message);
+        errors++;
+      }
+    }
+
+    console.log(`✅ Import complete: ${imported} imported, ${skipped} skipped, ${errors} errors`);
+    res.json({ success: true, total: allOrders.length, imported, skipped, errors, sample: results.slice(0,5) });
+  } catch (err) {
+    console.error('Import error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
