@@ -441,7 +441,24 @@ router.get('/stats/today', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// Fix client groups for imported orders
+router.post('/setup/fix-client-groups', async (req, res) => {
+  try {
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_group VARCHAR(50)`);
+    await pool.query(`UPDATE clients SET client_group = 'beg' WHERE id IN ('beg','beg_ops','beg_finance1','beg_finance2')`);
+    await pool.query(`UPDATE clients SET client_group = 'jonarts' WHERE id IN ('jonarts','jonarts_ops','jonarts_finance')`);
+    await pool.query(`UPDATE clients SET client_group = 'aebath' WHERE id IN ('aebath','aebath_finance1','aebath_finance2')`);
+    await pool.query(`UPDATE orders SET client_id = 'beg_ops' WHERE (store_number ILIKE '%299%' OR store_number ILIKE '%staples%' OR store_number ILIKE '%bureau%') AND client_id NOT IN ('beg_ops','beg_finance1','beg_finance2')`);
+    await pool.query(`UPDATE orders SET client_id = 'jonarts_ops' WHERE (billing_email ILIKE '%jonarts%' OR to_business_name ILIKE '%jonarts%' OR client_id = 'jonarts') AND client_id NOT IN ('jonarts_ops','jonarts_finance')`);
+    await pool.query(`UPDATE orders SET client_id = 'aebath_finance1' WHERE (billing_email ILIKE '%aebath%' OR to_business_name ILIKE '%aebath%' OR client_id = 'aebath') AND client_id NOT IN ('aebath_finance1','aebath_finance2')`);
+    const { rows: beg } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('beg_ops','beg_finance1','beg_finance2')`);
+    const { rows: jonarts } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('jonarts_ops','jonarts_finance')`);
+    const { rows: aebath } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('aebath_finance1','aebath_finance2')`);
+    res.json({ success: true, beg: parseInt(beg[0].count), jonarts: parseInt(jonarts[0].count), aebath: parseInt(aebath[0].count) });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
