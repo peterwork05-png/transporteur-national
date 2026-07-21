@@ -10,7 +10,7 @@ const NAV = [
   { to: '/admin/payments', label: 'Payments',        icon: '💳' },
   { to: '/admin/drivers',  label: 'Drivers',         icon: '👥' },
   { to: '/admin/settings', label: 'Settings',        icon: '⚙️' },
-  { to: '/admin/import', label: 'Import orders', icon: '📥' },
+  { to: '/admin/import',   label: 'Import orders',   icon: '📥' },
 ];
 
 export default function AdminLayout() {
@@ -20,16 +20,16 @@ export default function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/'); };
-  const closeMobile = () => setMobileOpen(false);
+  const closeMobile  = () => setMobileOpen(false);
 
   const currentPage = NAV.find(n => n.end ? location.pathname === n.to : location.pathname.startsWith(n.to));
 
   const SidebarContent = () => (
     <>
-      {/* Logo */}
       <div className="px-4 py-4" style={{borderBottom:'0.5px solid rgba(139,105,20,0.15)'}}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xl flex-shrink-0" style={{background:'rgba(139,105,20,0.15)',border:'0.5px solid rgba(139,105,20,0.25)'}}>🦅</div>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xl flex-shrink-0"
+            style={{background:'rgba(139,105,20,0.15)',border:'0.5px solid rgba(139,105,20,0.25)'}}>🦅</div>
           <div>
             <p className="text-xs font-semibold leading-tight" style={{color:'var(--tn-cream)'}}>Transporteur</p>
             <p className="text-xs" style={{color:'rgba(250,247,240,0.3)'}}>National MC</p>
@@ -37,7 +37,6 @@ export default function AdminLayout() {
         </div>
       </div>
 
-      {/* Nav */}
       <div className="flex-1 py-3 px-2 overflow-y-auto">
         <p className="text-xs px-2 pb-1 uppercase tracking-wider" style={{color:'rgba(250,247,240,0.2)'}}>Overview</p>
         {NAV.slice(0,3).map(item => (
@@ -65,10 +64,10 @@ export default function AdminLayout() {
         ))}
       </div>
 
-      {/* Footer */}
       <div className="p-3" style={{borderTop:'0.5px solid rgba(139,105,20,0.15)'}}>
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{background:'var(--tn-red)'}}>
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+            style={{background:'var(--tn-red)'}}>
             {user?.initials || 'AD'}
           </div>
           <div className="flex-1 min-w-0">
@@ -77,7 +76,7 @@ export default function AdminLayout() {
           </div>
         </div>
         <button onClick={handleLogout}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs"
           style={{color:'rgba(250,247,240,0.3)'}}>
           🚪 Sign out
         </button>
@@ -88,7 +87,7 @@ export default function AdminLayout() {
   return (
     <div className="flex h-screen overflow-hidden" style={{background:'var(--tn-cream)'}}>
 
-      {/* Desktop sidebar — hidden on mobile */}
+      {/* Desktop sidebar */}
       <aside className="hidden md:flex w-52 flex-col flex-shrink-0" style={{background:'var(--tn-dark)'}}>
         <SidebarContent />
       </aside>
@@ -96,8 +95,9 @@ export default function AdminLayout() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden" onClick={closeMobile}>
-          <div className="absolute inset-0 bg-black/60" />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col" style={{background:'var(--tn-dark)'}} onClick={e => e.stopPropagation()}>
+          <div className="absolute inset-0" style={{background:'rgba(0,0,0,0.6)'}} />
+          <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col z-10"
+            style={{background:'var(--tn-dark)'}} onClick={e => e.stopPropagation()}>
             <SidebarContent />
           </aside>
         </div>
@@ -107,19 +107,42 @@ export default function AdminLayout() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Mobile top bar */}
-        <div className="flex md:hidden items-center justify-between px-4 py-3 flex-shrink-0" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
-          <button onClick={() => setMobileOpen(true)} className="flex flex-col gap-1 p-1">
-            <span className="block w-5 h-0.5 bg-white rounded" />
-            <span className="block w-5 h-0.5 bg-white rounded" />
-            <span className="block w-5 h-0.5 bg-white rounded" />
+        <div className="flex md:hidden items-center justify-between flex-shrink-0"
+          style={{background:'var(--tn-dark)', borderBottom:'0.5px solid rgba(139,105,20,0.2)', padding:'12px 16px', minHeight:'56px'}}>
+
+          {/* Hamburger — big tap target */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            style={{
+              width: '44px',
+              height: '44px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '5px',
+              background: 'rgba(250,247,240,0.08)',
+              borderRadius: '10px',
+              border: '0.5px solid rgba(139,105,20,0.2)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}>
+            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
+            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
+            <span style={{display:'block', width:'18px', height:'2px', background:'white', borderRadius:'2px'}} />
           </button>
+
+          {/* Page title */}
           <div className="flex items-center gap-2">
             <span className="text-base">🦅</span>
             <p className="text-sm font-semibold" style={{color:'var(--tn-cream)'}}>
               {currentPage?.label || 'Admin'}
             </p>
           </div>
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{background:'var(--tn-red)'}}>
+
+          {/* Avatar */}
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+            style={{background:'var(--tn-red)'}}>
             {user?.initials || 'AD'}
           </div>
         </div>
