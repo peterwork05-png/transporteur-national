@@ -10,6 +10,7 @@ const NAV = [
   { to: '/admin/payments', label: 'Payments',        icon: '💳' },
   { to: '/admin/drivers',  label: 'Drivers',         icon: '👥' },
   { to: '/admin/settings', label: 'Settings',        icon: '⚙️' },
+  { to: '/admin/import', label: 'Import orders', icon: '📥' },
 ];
 
 export default function AdminLayout() {
