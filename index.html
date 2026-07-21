@@ -18,25 +18,31 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
 
-    <!-- Splash screens for iOS -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
     <!-- Standard -->
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <title>Transporteur National</title>
 
-    <!-- Prevent zoom on inputs iOS -->
     <style>
+      /* Prevent zoom on inputs iOS */
       input, select, textarea { font-size: 16px !important; }
       * { -webkit-tap-highlight-color: transparent; }
-      body { overscroll-behavior: none; }
+      body { 
+        overscroll-behavior: none;
+        /* Push content below status bar in PWA mode */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        background: #1A1208;
+      }
+      #root {
+        /* Remove the body padding from root so layout handles it */
+        margin-top: calc(-1 * env(safe-area-inset-top));
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Register service worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
