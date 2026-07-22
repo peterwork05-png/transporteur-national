@@ -429,6 +429,32 @@ router.get('/stats/today', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ── GPS LOCATION ─────────────────────────────────────────
+
+router.post('/drivers/:id/location', async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS last_lat FLOAT`);
+    await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS last_lng FLOAT`);
+    await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMP`);
+    await pool.query(
+      `UPDATE drivers SET last_lat = $1, last_lng = $2, location_updated_at = NOW() WHERE id = $3`,
+      [lat, lng, req.params.id]
+    );
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/drivers/:id/location', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT last_lat as lat, last_lng as lng, location_updated_at FROM drivers WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0 || !rows[0].lat) return res.json({ lat: null, lng: null });
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;
 
