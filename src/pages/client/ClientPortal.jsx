@@ -277,7 +277,13 @@ export default function ClientPortal() {
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold">{fmt(inv.total||inv.amount)}</p>
-                        <button className="btn btn-outline btn-sm mt-1 text-xs">⬇ PDF</button>
+                        {inv.pdf_url
+                          ? <a href={inv.pdf_url} target="_blank" rel="noreferrer"
+                              className="btn btn-outline btn-sm mt-1 text-xs" onClick={e=>e.stopPropagation()}>
+                              ⬇ View PDF
+                            </a>
+                          : <span className="text-xs mt-1 block" style={{color:'var(--tn-gold)'}}>PDF pending</span>
+                        }
                       </div>
                     </div>
                   </div>
