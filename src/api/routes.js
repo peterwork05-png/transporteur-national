@@ -754,33 +754,33 @@ router.post('/invoices/:id/upload-pdf', async (req, res) => {
       return res.status(500).json({ error: 'Cloudinary not configured' });
     }
 
-    // Upload to Cloudinary
     const timestamp = Math.round(Date.now() / 1000);
     const publicId  = `invoices/invoice_${req.params.id}`;
     
-    // Create signature
+    // Create proper SHA1 signature for Cloudinary
     const crypto = await import('crypto');
-    const sigStr = `public_id=${publicId}&timestamp=${timestamp}&upload_preset=ml_default${apiSecret}`;
-    // Use direct upload without preset
-    const sigStr2 = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
-    const signature = crypto.default.createHash('sha256').update(sigStr2).digest('hex');
+    const sigStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto.default.createHash('sha1').update(sigStr).digest('hex');
 
-    const formData = new URLSearchParams();
-    formData.append('file', `data:application/pdf;base64,${pdfBase64}`);
-    formData.append('public_id', publicId);
-    formData.append('timestamp', timestamp);
-    formData.append('api_key', apiKey);
-    formData.append('signature', signature);
-    formData.append('resource_type', 'raw');
+    // Use multipart form upload
+    const FormData = (await import('form-data')).default;
+    const form = new FormData();
+    form.append('file', `data:application/pdf;base64,${pdfBase64}`);
+    form.append('public_id', publicId);
+    form.append('timestamp', String(timestamp));
+    form.append('api_key', apiKey);
+    form.append('signature', signature);
+    form.append('resource_type', 'raw');
 
     const uploadRes = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-      { method: 'POST', body: formData }
+      { method: 'POST', body: form, headers: form.getHeaders() }
     );
 
     const uploadData = await uploadRes.json();
 
-    if (!uploadRes.ok) {
+    if (!uploadRes.ok || uploadData.error) {
+      console.error('Cloudinary error:', uploadData);
       return res.status(400).json({ error: uploadData.error?.message || 'Upload failed' });
     }
 
