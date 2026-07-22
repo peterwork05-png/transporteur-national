@@ -806,3 +806,36 @@ router.post('/invoices/:id/upload-pdf', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── CREATE JULY INVOICES ──────────────────────────────────
+router.post('/setup/create-invoices', async (req, res) => {
+  try {
+    const invoices = [
+      { id:586, client_id:'jonarts_ops',   type:'local',    route:null,       date_from:'2026-07-01', date_to:'2026-07-01', days:null, subtotal:254.97,  tps:12.75,  tvq:25.43,  total:293.15  },
+      { id:590, client_id:'beg_ops',       type:'contract', route:'ontario',  date_from:'2026-06-29', date_to:'2026-07-03', days:5,    subtotal:3749.95, tps:187.50, tvq:374.06, total:4311.51 },
+      { id:591, client_id:'beg_ops',       type:'contract', route:'quebec',   date_from:'2026-06-29', date_to:'2026-07-03', days:5,    subtotal:2925.00, tps:146.25, tvq:291.77, total:3363.02 },
+      { id:592, client_id:'beg_ops',       type:'local',    route:null,       date_from:'2026-06-15', date_to:'2026-06-30', days:null, subtotal:1207.77, tps:60.39,  tvq:120.47, total:1388.63 },
+      { id:593, client_id:'beg_ops',       type:'contract', route:'ontario',  date_from:'2026-07-06', date_to:'2026-07-10', days:5,    subtotal:3749.95, tps:187.50, tvq:374.06, total:4311.51 },
+      { id:594, client_id:'beg_ops',       type:'contract', route:'quebec',   date_from:'2026-07-06', date_to:'2026-07-10', days:5,    subtotal:2925.00, tps:146.25, tvq:291.77, total:3363.02 },
+      { id:595, client_id:'jonarts_ops',   type:'local',    route:null,       date_from:'2026-07-01', date_to:'2026-07-17', days:null, subtotal:127.48,  tps:6.37,   tvq:12.72,  total:146.57  },
+      { id:597, client_id:'beg_ops',       type:'contract', route:'ontario',  date_from:'2026-07-13', date_to:'2026-07-17', days:5,    subtotal:3749.95, tps:187.50, tvq:374.06, total:4311.51 },
+      { id:598, client_id:'beg_ops',       type:'contract', route:'quebec',   date_from:'2026-07-13', date_to:'2026-07-17', days:5,    subtotal:2925.00, tps:146.25, tvq:291.77, total:3363.02 },
+      { id:599, client_id:'beg_ops',       type:'local',    route:null,       date_from:'2026-07-01', date_to:'2026-07-15', days:null, subtotal:864.83,  tps:43.24,  tvq:86.27,  total:994.34  },
+    ];
+
+    let created = 0;
+    for (const inv of invoices) {
+      const { rows } = await pool.query(`
+        INSERT INTO invoices (id, client_id, type, route, date_from, date_to, days, subtotal, tps, tvq, total, status)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
+      `, [inv.id, inv.client_id, inv.type, inv.route, inv.date_from, inv.date_to, inv.days, inv.subtotal, inv.tps, inv.tvq, inv.total]);
+      if (rows.length > 0) created++;
+    }
+
+    res.json({ success: true, created, message: `${created} invoices created` });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
