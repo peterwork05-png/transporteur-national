@@ -355,19 +355,7 @@ router.post('/clients', async (req, res) => {
   }
 });
 
-router.post('/auth/client-login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const { rows } = await pool.query(
-      'SELECT id, name, email, role, client_group, language, signoff FROM clients WHERE LOWER(email) = LOWER($1) AND password = $2 AND active = true'
-      [email, password]
-    );
-    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    res.json({ success: true, client: rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 
 // ── INVOICES ──────────────────────────────────────────────
 
