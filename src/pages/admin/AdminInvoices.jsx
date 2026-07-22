@@ -20,7 +20,7 @@ export default function AdminInvoices() {
   });
 
   const filtered = invoices.filter(inv => tab==='all' ? true : inv.status===tab);
-  const fmt = n => `$${parseFloat(n||0).toLocaleString('fr-CA',{minimumFractionDigits:2})}`;
+  const fmt = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const getClientName = inv => CLIENTS[inv.client]?.name || inv.client_name || inv.client || '—';
   const TABS = [['all','All'],['pending','Pending'],['paid','Paid'],['overdue','Overdue']];
 
@@ -125,7 +125,7 @@ export default function AdminInvoices() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm">{getClientName(inv)}</td>
-                <td className="px-4 py-3 text-sm" style={{color:'var(--tn-gold)'}}>{inv.dates || `${inv.date_from||''} – ${inv.date_to||''}`}</td>
+                <td className="px-4 py-3 text-sm" style={{color:'var(--tn-gold)'}}>{String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{fmt(inv.amount)}</td>
                 <td className="px-4 py-3">
                   <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>
