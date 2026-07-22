@@ -42,7 +42,15 @@ export default function ClientPortal() {
   const [selectedOrder,   setSelectedOrder]   = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  const handleLogin = async (e) => {
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (selectedOrder || selectedInvoice) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [selectedOrder, selectedInvoice]);
     e.preventDefault();
     setLoading(true); setError('');
     try {
@@ -346,12 +354,10 @@ export default function ClientPortal() {
       {selectedOrder && (
         <div className="fixed inset-0 flex items-end z-50"
           style={{background:'rgba(26,18,8,0.6)'}}
-          onClick={()=>setSelectedOrder(null)}
-          onWheel={e=>e.stopPropagation()}>
+          onClick={()=>setSelectedOrder(null)}>
           <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
             style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
-            onClick={e=>e.stopPropagation()}
-            onWheel={e=>e.stopPropagation()}>
+            onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
               <div className="flex items-center justify-between">
@@ -416,12 +422,10 @@ export default function ClientPortal() {
       {selectedInvoice && (
         <div className="fixed inset-0 flex items-end z-50"
           style={{background:'rgba(26,18,8,0.6)'}}
-          onClick={()=>setSelectedInvoice(null)}
-          onWheel={e=>e.stopPropagation()}>
+          onClick={()=>setSelectedInvoice(null)}>
           <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
             style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
-            onClick={e=>e.stopPropagation()}
-            onWheel={e=>e.stopPropagation()}>
+            onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
               <div className="flex items-center justify-between">
