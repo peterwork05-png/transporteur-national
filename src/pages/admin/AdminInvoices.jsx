@@ -197,7 +197,7 @@ export default function AdminInvoices() {
                 {[
                   {label:'Client',     val: getClientName(selected)},
                   {label:'Type',       val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
-                  {label:'Period',     val: selected.dates || `${selected.date_from||''} – ${selected.date_to||''}`},
+                  {label:'Period',     val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
                   {label:'Days',       val: selected.days ? `${selected.days} days` : null},
                 ].filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
