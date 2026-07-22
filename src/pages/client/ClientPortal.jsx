@@ -51,6 +51,8 @@ export default function ClientPortal() {
     }
     return () => { document.body.style.overflow = ''; };
   }, [selectedOrder, selectedInvoice]);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true); setError('');
     try {
