@@ -14,7 +14,7 @@ const PERIODS = [
   { val:'all',   label:'All time' },
 ];
 
-const fmt    = n => `$${parseFloat(n||0).toLocaleString('fr-CA',{minimumFractionDigits:2})}`;
+const fmt    = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
 const fmtDate = d => d ? String(d).split('T')[0] : '—';
 
 // Auto-determine if invoice is overdue (pending + older than 14 days)
@@ -345,8 +345,9 @@ export default function ClientPortal() {
       {/* Order detail modal */}
       {selectedOrder && (
         <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}} onClick={()=>setSelectedOrder(null)}>
-          <div className="w-full rounded-t-2xl max-w-2xl mx-auto max-h-[85vh] overflow-y-auto"
-            style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
+          <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
+            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
+            onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
               <div className="flex items-center justify-between">
@@ -410,8 +411,9 @@ export default function ClientPortal() {
       {/* Invoice detail modal */}
       {selectedInvoice && (
         <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}} onClick={()=>setSelectedInvoice(null)}>
-          <div className="w-full rounded-t-2xl max-w-2xl mx-auto max-h-[85vh] overflow-y-auto"
-            style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
+          <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
+            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
+            onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
               <div className="flex items-center justify-between">
