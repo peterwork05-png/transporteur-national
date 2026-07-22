@@ -359,7 +359,7 @@ router.post('/auth/client-login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, client_group, language, signoff FROM clients WHERE LOWER(email) = LOWER($1) AND password = $2 AND active = true',
+      'SELECT id, name, address, language, signoff FROM clients WHERE email = $1 AND password = $2 AND active = true',
       [email, password]
     );
     if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
@@ -441,24 +441,7 @@ router.get('/stats/today', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Fix client groups for imported orders
-router.post('/setup/fix-client-groups', async (req, res) => {
-  try {
-    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_group VARCHAR(50)`);
-    await pool.query(`UPDATE clients SET client_group = 'beg' WHERE id IN ('beg','beg_ops','beg_finance1','beg_finance2')`);
-    await pool.query(`UPDATE clients SET client_group = 'jonarts' WHERE id IN ('jonarts','jonarts_ops','jonarts_finance')`);
-    await pool.query(`UPDATE clients SET client_group = 'aebath' WHERE id IN ('aebath','aebath_finance1','aebath_finance2')`);
-    await pool.query(`UPDATE orders SET client_id = 'beg_ops' WHERE (store_number ILIKE '%299%' OR store_number ILIKE '%staples%' OR store_number ILIKE '%bureau%') AND client_id NOT IN ('beg_ops','beg_finance1','beg_finance2')`);
-    await pool.query(`UPDATE orders SET client_id = 'jonarts_ops' WHERE (billing_email ILIKE '%jonarts%' OR to_business_name ILIKE '%jonarts%' OR client_id = 'jonarts') AND client_id NOT IN ('jonarts_ops','jonarts_finance')`);
-    await pool.query(`UPDATE orders SET client_id = 'aebath_finance1' WHERE (billing_email ILIKE '%aebath%' OR to_business_name ILIKE '%aebath%' OR client_id = 'aebath') AND client_id NOT IN ('aebath_finance1','aebath_finance2')`);
-    const { rows: beg } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('beg_ops','beg_finance1','beg_finance2')`);
-    const { rows: jonarts } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('jonarts_ops','jonarts_finance')`);
-    const { rows: aebath } = await pool.query(`SELECT COUNT(*) FROM orders WHERE client_id IN ('aebath_finance1','aebath_finance2')`);
-    res.json({ success: true, beg: parseInt(beg[0].count), jonarts: parseInt(jonarts[0].count), aebath: parseInt(aebath[0].count) });
-  } catch(err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
@@ -765,6 +748,61 @@ router.get('/client/invoices', async (req, res) => {
     `, [client_group]);
     res.json(rows);
   } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PDF UPLOAD ────────────────────────────────────────────
+
+router.post('/invoices/:id/upload-pdf', async (req, res) => {
+  try {
+    const { pdfBase64, filename } = req.body;
+    
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey    = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(500).json({ error: 'Cloudinary not configured' });
+    }
+
+    // Upload to Cloudinary
+    const timestamp = Math.round(Date.now() / 1000);
+    const publicId  = `invoices/invoice_${req.params.id}`;
+    
+    // Create signature
+    const crypto = await import('crypto');
+    const sigStr = `public_id=${publicId}&timestamp=${timestamp}&upload_preset=ml_default${apiSecret}`;
+    // Use direct upload without preset
+    const sigStr2 = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto.default.createHash('sha256').update(sigStr2).digest('hex');
+
+    const formData = new URLSearchParams();
+    formData.append('file', `data:application/pdf;base64,${pdfBase64}`);
+    formData.append('public_id', publicId);
+    formData.append('timestamp', timestamp);
+    formData.append('api_key', apiKey);
+    formData.append('signature', signature);
+    formData.append('resource_type', 'raw');
+
+    const uploadRes = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+      { method: 'POST', body: formData }
+    );
+
+    const uploadData = await uploadRes.json();
+
+    if (!uploadRes.ok) {
+      return res.status(400).json({ error: uploadData.error?.message || 'Upload failed' });
+    }
+
+    // Save PDF URL to invoice
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pdf_url TEXT`);
+    await pool.query(`UPDATE invoices SET pdf_url = $1 WHERE id = $2`, [uploadData.secure_url, req.params.id]);
+
+    res.json({ success: true, pdf_url: uploadData.secure_url });
+  } catch(err) {
+    console.error('PDF upload error:', err);
     res.status(500).json({ error: err.message });
   }
 });
