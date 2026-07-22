@@ -179,25 +179,15 @@ export default function ClientPortal() {
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          {isFinance ? [
-            {label:'Pending',      val:fmt(pendingAmt), color:'var(--tn-gold)'},
-            {label:'Overdue',      val:fmt(overdueAmt), color:'#991B1B'},
-            {label:'Total invoices', val:invoices.length, color:'var(--tn-red)'},
+          {(isFinance ? [
+            {label:'Pending',        val:fmt(pendingAmt),  color:'var(--tn-gold)'},
+            {label:'Overdue',        val:fmt(overdueAmt),  color:'#991B1B'},
+            {label:'Total invoices', val:invoices.length,  color:'var(--tn-red)'},
           ] : [
             {label:'Delivered',   val:delivered,       color:'#0F6E56'},
             {label:'In progress', val:inProgress,      color:'var(--tn-gold)'},
             {label:'Total value', val:fmt(totalValue), color:'var(--tn-red)'},
-          ].map((s,i)=>(
-            <div key={i} className="card p-3 text-center">
-              <div className="text-lg font-semibold" style={{color:s.color}}>{s.val}</div>
-              <div className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{s.label}</div>
-            </div>
-          ))}
-          {isFinance && [
-            {label:'Pending',      val:fmt(pendingAmt), color:'var(--tn-gold)'},
-            {label:'Overdue',      val:fmt(overdueAmt), color:'#991B1B'},
-            {label:'Total invoices', val:invoices.length, color:'var(--tn-red)'},
-          ].map((s,i)=>(
+          ]).map((s,i)=>(
             <div key={i} className="card p-3 text-center">
               <div className="text-lg font-semibold" style={{color:s.color}}>{s.val}</div>
               <div className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{s.label}</div>
