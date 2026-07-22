@@ -64,10 +64,13 @@ export function AppProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) setInvoices(data.map(i => ({
+          ...i,
           id: i.id, type: i.type, client: i.client_id, route: i.route,
-          dates: `${i.date_from || ''} – ${i.date_to || ''}`,
+          dates: `${String(i.date_from||'').split('T')[0]} – ${String(i.date_to||'').split('T')[0]}`,
+          date_from: i.date_from, date_to: i.date_to,
           amount: parseFloat(i.total || 0), days: i.days, status: i.status,
           eft: i.eft_number, client_name: i.client_name,
+          pdf_url: i.pdf_url || null,
         })));
       }
     } catch (err) { console.error(err); }
