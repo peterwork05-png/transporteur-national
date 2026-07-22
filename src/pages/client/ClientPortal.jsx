@@ -42,15 +42,10 @@ export default function ClientPortal() {
   const [selectedOrder,   setSelectedOrder]   = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  // Lock body scroll when modal is open
+  // Clean up body scroll on unmount
   useEffect(() => {
-    if (selectedOrder || selectedInvoice) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
     return () => { document.body.style.overflow = ''; };
-  }, [selectedOrder, selectedInvoice]);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -165,7 +160,7 @@ export default function ClientPortal() {
   );
 
   return (
-    <div className="min-h-screen" style={{background:'var(--tn-cream)'}}>
+    <div className="min-h-screen" style={{background:'var(--tn-cream)', overflowY:'auto', height:'100vh'}}>
       {/* Header */}
       <div className="sticky top-0 z-10 px-4 py-3" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
