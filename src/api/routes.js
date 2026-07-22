@@ -744,7 +744,7 @@ router.get('/client/invoices', async (req, res) => {
 
 router.post('/invoices/:id/upload-pdf', async (req, res) => {
   try {
-    const { pdfBase64, filename } = req.body;
+    const { pdfBase64 } = req.body;
     
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey    = process.env.CLOUDINARY_API_KEY;
@@ -757,34 +757,45 @@ router.post('/invoices/:id/upload-pdf', async (req, res) => {
     const timestamp = Math.round(Date.now() / 1000);
     const publicId  = `invoices/invoice_${req.params.id}`;
     
-    // Create proper SHA1 signature for Cloudinary
-    const crypto = await import('crypto');
-    const sigStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
-    const signature = crypto.default.createHash('sha1').update(sigStr).digest('hex');
+    // SHA1 signature required by Cloudinary
+    const { createHash } = await import('crypto');
+    const sigStr   = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    const signature = createHash('sha1').update(sigStr).digest('hex');
 
-    // Use multipart form upload
-    const FormData = (await import('form-data')).default;
-    const form = new FormData();
-    form.append('file', `data:application/pdf;base64,${pdfBase64}`);
-    form.append('public_id', publicId);
-    form.append('timestamp', String(timestamp));
-    form.append('api_key', apiKey);
-    form.append('signature', signature);
-    form.append('resource_type', 'raw');
+    // Build multipart body manually
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+    const fields = {
+      file: `data:application/pdf;base64,${pdfBase64}`,
+      public_id: publicId,
+      timestamp: String(timestamp),
+      api_key: apiKey,
+      signature,
+    };
+
+    let body = '';
+    for (const [key, value] of Object.entries(fields)) {
+      body += `--${boundary}\r\n`;
+      body += `Content-Disposition: form-data; name="${key}"\r\n\r\n`;
+      body += `${value}\r\n`;
+    }
+    body += `--${boundary}--\r\n`;
 
     const uploadRes = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-      { method: 'POST', body: form, headers: form.getHeaders() }
+      {
+        method: 'POST',
+        headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+        body,
+      }
     );
 
     const uploadData = await uploadRes.json();
 
     if (!uploadRes.ok || uploadData.error) {
-      console.error('Cloudinary error:', uploadData);
+      console.error('Cloudinary error:', JSON.stringify(uploadData));
       return res.status(400).json({ error: uploadData.error?.message || 'Upload failed' });
     }
 
-    // Save PDF URL to invoice
     await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pdf_url TEXT`);
     await pool.query(`UPDATE invoices SET pdf_url = $1 WHERE id = $2`, [uploadData.secure_url, req.params.id]);
 
