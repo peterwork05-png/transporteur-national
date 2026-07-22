@@ -346,7 +346,7 @@ export default function ClientPortal() {
       {selectedOrder && (
         <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}} onClick={()=>setSelectedOrder(null)}>
           <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
-            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
+            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'scroll', WebkitOverflowScrolling:'touch', overscrollBehavior:'contain'}}
             onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
@@ -412,7 +412,7 @@ export default function ClientPortal() {
       {selectedInvoice && (
         <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}} onClick={()=>setSelectedInvoice(null)}>
           <div className="w-full rounded-t-2xl max-w-2xl mx-auto"
-            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'auto', WebkitOverflowScrolling:'touch'}}
+            style={{background:'var(--tn-cream)', maxHeight:'85vh', overflowY:'scroll', WebkitOverflowScrolling:'touch', overscrollBehavior:'contain'}}
             onClick={e=>e.stopPropagation()}>
             <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-3" style={{background:'var(--tn-border-strong)'}}/>
             <div className="px-5 pb-6 space-y-3">
