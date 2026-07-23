@@ -380,12 +380,18 @@ router.get('/invoices', async (req, res) => {
 
 router.post('/invoices', async (req, res) => {
   try {
-    const { type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total } = req.body;
-    const { rows } = await pool.query(`
-      INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *
-    `, [type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total]);
+    const { id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total } = req.body;
+    let query, params;
+    if (id) {
+      query = `INSERT INTO invoices (id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`;
+      params = [id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total];
+    } else {
+      query = `INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`;
+      params = [type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total];
+    }
+    const { rows } = await pool.query(query, params);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
