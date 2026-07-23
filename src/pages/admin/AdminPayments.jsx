@@ -314,9 +314,35 @@ export default function AdminPayments() {
 }
 
 function ReminderButton({ inv, getClientName, fmt }) {
-  const [sending,  setSending]  = useState(false);
-  const [sent,     setSent]     = useState(false);
-  const [error,    setError]    = useState(null);
+  const [sending,       setSending]       = useState(false);
+  const [sent,          setSent]          = useState(false);
+  const [error,         setError]         = useState(null);
+  const [preview,       setPreview]       = useState(null);
+  const [loadingPreview,setLoadingPreview]= useState(false);
+
+  // Editable fields
+  const [editTo,      setEditTo]      = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editNote,    setEditNote]    = useState('');
+
+  const loadPreview = async () => {
+    setLoadingPreview(true);
+    try {
+      const res  = await fetch('/api/invoices/reminder-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: inv.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPreview(data);
+        setEditTo(data.to);
+        setEditSubject(data.subject);
+        setEditNote('');
+      } else { setError(data.error || 'Could not load preview'); }
+    } catch(e) { setError(e.message); }
+    setLoadingPreview(false);
+  };
 
   const sendReminder = async () => {
     setSending(true);
@@ -325,10 +351,10 @@ function ReminderButton({ inv, getClientName, fmt }) {
       const res  = await fetch('/api/invoices/send-reminder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceId: inv.id }),
+        body: JSON.stringify({ invoiceId: inv.id, to: editTo, subject: editSubject, note: editNote }),
       });
       const data = await res.json();
-      if (data.success) { setSent(true); }
+      if (data.success) { setSent(true); setPreview(null); }
       else { setError(data.error || 'Failed to send'); }
     } catch(e) { setError(e.message); }
     setSending(false);
@@ -338,10 +364,97 @@ function ReminderButton({ inv, getClientName, fmt }) {
   if (error) return <span className="text-xs flex-shrink-0" style={{color:'#991B1B'}}>❌ {error}</span>;
 
   return (
-    <button onClick={sendReminder} disabled={sending}
-      className="btn btn-outline btn-sm flex-shrink-0"
-      style={{opacity:sending?0.6:1}}>
-      {sending ? '...' : '📧 Remind'}
-    </button>
+    <>
+      <button onClick={loadPreview} disabled={loadingPreview}
+        className="btn btn-outline btn-sm flex-shrink-0"
+        style={{opacity:loadingPreview?0.6:1}}>
+        {loadingPreview ? '...' : '📧 Remind'}
+      </button>
+
+      {/* Preview modal */}
+      {preview && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
+            
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>📧 Email preview & edit</p>
+              <button onClick={() => setPreview(null)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+
+            <div className="p-5 space-y-4">
+
+              {/* Editable To field */}
+              <div>
+                <label className="label">To (edit to add/remove recipients)</label>
+                <input className="input" value={editTo} onChange={e=>setEditTo(e.target.value)}
+                  placeholder="email@company.com, email2@company.com" />
+                <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Separate multiple emails with commas</p>
+              </div>
+
+              {/* Editable Subject */}
+              <div>
+                <label className="label">Subject</label>
+                <input className="input" value={editSubject} onChange={e=>setEditSubject(e.target.value)} />
+              </div>
+
+              {/* Invoice summary — read only */}
+              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-2 font-medium" style={{color:'var(--tn-gold)'}}>Invoice details (auto-included)</p>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Invoice #</span>
+                    <span className="font-medium">#{inv.id}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Period</span>
+                    <span className="font-medium">{preview.dateFrom} – {preview.dateTo}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Type</span>
+                    <span className="font-medium">{inv.type==='contract'?`Contract · ${inv.route} route`:'Local deliveries'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+                    <span>Total due</span>
+                    <span style={{color:'var(--tn-red)'}}>{preview.total}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Personal note */}
+              <div>
+                <label className="label">Personal note (optional)</label>
+                <textarea className="input" rows={3}
+                  placeholder="Add a personal message... e.g. Please don't hesitate to call if you have any questions."
+                  value={editNote} onChange={e=>setEditNote(e.target.value)}
+                  style={{resize:'none', minHeight:'80px'}} />
+                <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>This will appear at the top of the email</p>
+              </div>
+
+              {/* PDF note */}
+              {preview.hasPdf && (
+                <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
+                  <span>📄</span>
+                  <p className="text-sm" style={{color:'#0F6E56'}}>PDF invoice link will be included automatically</p>
+                </div>
+              )}
+
+              <div className="rounded-xl p-3" style={{background:'#EFF6FF'}}>
+                <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Email is sent in both French and English</p>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setPreview(null)} className="btn btn-outline flex-1 justify-center">
+                  Cancel
+                </button>
+                <button onClick={sendReminder} disabled={sending || !editTo}
+                  className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white',opacity:sending||!editTo?0.7:1}}>
+                  {sending ? 'Sending...' : '📧 Send reminder'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
