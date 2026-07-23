@@ -17,10 +17,17 @@ export default function AdminPayments() {
   const [gmailStatus,setGmailStatus]= useState(null);
   const [checking,   setChecking]   = useState(false);
   const [gmailResult,setGmailResult]= useState(null);
+  const [stats,      setStats]      = useState({ collected_ytd:0, pending:0, overdue:0 });
 
   useEffect(() => {
     fetch('/api/gmail/status').then(r=>r.json()).then(setGmailStatus).catch(()=>{});
+    fetch('/api/stats/payments').then(r=>r.json()).then(setStats).catch(()=>{});
   }, []);
+
+  // Refresh stats when invoices change
+  useEffect(() => {
+    fetch('/api/stats/payments').then(r=>r.json()).then(setStats).catch(()=>{});
+  }, [invoices]);
 
   const runGmailCheck = async () => {
     setChecking(true);
@@ -55,7 +62,7 @@ export default function AdminPayments() {
     setTab('history');
   };
 
-  const fmt = n => `$${parseFloat(n||0).toLocaleString('fr-CA',{minimumFractionDigits:2})}`;
+  const fmt = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const pendingTotal = unpaid.filter(i=>i.status==='pending').reduce((s,i)=>s+parseFloat(i.amount||0),0);
   const overdueTotal = unpaid.filter(i=>i.status==='overdue').reduce((s,i)=>s+parseFloat(i.amount||0),0);
 
@@ -78,9 +85,9 @@ export default function AdminPayments() {
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          {val:'$32,418', label:'Collected YTD',  color:'#0F6E56'},
-          {val:fmt(pendingTotal), label:'Pending', color:'var(--tn-gold)'},
-          {val:fmt(overdueTotal), label:'Overdue', color:'#991B1B'},
+          {val:fmt(stats.collected_ytd), label:'Collected YTD', color:'#0F6E56'},
+          {val:fmt(stats.pending),       label:'Pending',        color:'var(--tn-gold)'},
+          {val:fmt(stats.overdue),       label:'Overdue',        color:'#991B1B'},
         ].map((k,i)=>(
           <div key={i} className="card p-3 md:p-4">
             <div className="text-lg md:text-2xl font-semibold" style={{color:k.color}}>{k.val}</div>
