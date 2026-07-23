@@ -429,6 +429,7 @@ router.get('/stats/today', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // ── GPS LOCATION ─────────────────────────────────────────
 
 router.post('/drivers/:id/location', async (req, res) => {
