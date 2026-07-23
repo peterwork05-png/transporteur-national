@@ -420,9 +420,17 @@ export default function AdminOrders() {
                 </div>
               )}
 
-              <button onClick={() => setSelected(null)} className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                Close
-              </button>
+              <div className="flex gap-2">
+                {(selected.status === 'enroute' || selected.status === 'picked') && (
+                  <a href={`/track/${selected.id}`} target="_blank" rel="noreferrer"
+                    className="btn flex-1 justify-center" style={{background:'#185FA5',color:'white'}}>
+                    🗺️ Track live
+                  </a>
+                )}
+                <button onClick={() => setSelected(null)} className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
