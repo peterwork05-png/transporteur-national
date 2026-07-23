@@ -8,7 +8,8 @@ const STATUS_INFO = {
   delivered: { label:'Delivered',     color:'#0F6E56', icon:'✅' },
 };
 
-const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+const TOKEN = 'pk.eyJ1IjoidHJhbnNwb3J0ZXVybmF0aW9uYWxtYyIsImEiOiJjbXJ3YzIzaTcwNHFyMnlvZDRqZ3N4ZmZ3In0.IKDUZdNanbw4y7N_oEEh6Q';
+
 export default function ClientTracking() {
   const { orderId } = useParams();
   const mapRef = useRef(null);
@@ -54,8 +55,9 @@ export default function ClientTracking() {
     return () => clearInterval(iv);
   }, [order]);
 
+  // Init map - center between driver and delivery if both available
   useEffect(() => {
-    if (!mapRef.current || mapObj.current || !coords) return;
+    if (mapObj.current || !mapRef.current || !coords) return;
 
     if (!document.querySelector('link[href*="mapbox-gl"]')) {
       const link = document.createElement('link');
@@ -71,19 +73,37 @@ export default function ClientTracking() {
         container: mapRef.current,
         style: 'mapbox://styles/mapbox/streets-v12',
         center: [coords.lng, coords.lat],
-        zoom: 14,
+        zoom: 13,
       });
       map.addControl(new window.mapboxgl.NavigationControl());
+
+      // Delivery pin
       const el = document.createElement('div');
       el.style.cssText = 'font-size:36px;line-height:1';
       el.textContent = '📍';
-      new window.mapboxgl.Marker({ element: el }).setLngLat([coords.lng, coords.lat]).addTo(map);
+      new window.mapboxgl.Marker({ element: el })
+        .setLngLat([coords.lng, coords.lat])
+        .setPopup(new window.mapboxgl.Popup({ offset:25 }).setHTML(
+          `<div style="font-family:sans-serif;padding:4px">
+            <p style="font-weight:700;margin:0;font-size:13px">${order?.to_business_name||order?.client_name||'Delivery'}</p>
+            <p style="color:#666;font-size:11px;margin:3px 0 0">${order?.address}</p>
+          </div>`
+        ))
+        .addTo(map);
+
       mapObj.current = map;
+
+      // If driver location already known, fit bounds to show both
+      if (driverPos) {
+        const bounds = new window.mapboxgl.LngLatBounds();
+        bounds.extend([coords.lng, coords.lat]);
+        bounds.extend([driverPos.lng, driverPos.lat]);
+        map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+      }
     };
 
-    if (window.mapboxgl) {
-      initMap();
-    } else {
+    if (window.mapboxgl) { initMap(); }
+    else {
       const script = document.createElement('script');
       script.src = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js';
       script.onload = initMap;
@@ -91,12 +111,29 @@ export default function ClientTracking() {
     }
   }, [coords]);
 
+  // Update driver marker and fit both on screen
   useEffect(() => {
     if (!mapObj.current || !driverPos || !window.mapboxgl) return;
     const el = document.createElement('div');
-    el.style.cssText = 'font-size:30px;line-height:1';
+    el.style.cssText = 'font-size:30px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
     el.textContent = '🚚';
-    new window.mapboxgl.Marker({ element: el }).setLngLat([driverPos.lng, driverPos.lat]).addTo(mapObj.current);
+    new window.mapboxgl.Marker({ element: el })
+      .setLngLat([driverPos.lng, driverPos.lat])
+      .setPopup(new window.mapboxgl.Popup({ offset:25 }).setHTML(
+        `<div style="font-family:sans-serif;padding:4px">
+          <p style="font-weight:700;margin:0">${order?.driver_name||'Driver'}</p>
+          <p style="color:#185FA5;font-size:11px;margin:3px 0 0">🚚 En route to you</p>
+        </div>`
+      ))
+      .addTo(mapObj.current);
+
+    // Fit map to show both driver and delivery
+    if (coords) {
+      const bounds = new window.mapboxgl.LngLatBounds();
+      bounds.extend([driverPos.lng, driverPos.lat]);
+      bounds.extend([coords.lng, coords.lat]);
+      mapObj.current.fitBounds(bounds, { padding: 80, maxZoom: 14, duration: 1000 });
+    }
   }, [driverPos]);
 
   if (loading) return (
