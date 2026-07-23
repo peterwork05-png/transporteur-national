@@ -14,6 +14,7 @@ import DriverRoute from './pages/driver/DriverRoute';
 import ClientTracking from './pages/client/ClientTracking';
 import ClientPortal from './pages/client/ClientPortal';
 import TrackSearch from './pages/client/TrackSearch';
+import AdminLiveMap from './pages/admin/AdminLiveMap';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="drivers" element={<AdminDrivers />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="import" element={<AdminImport />} />
+            <Route path="livemap" element={<AdminLiveMap />} />
           </Route>
           <Route path="/driver/local/:driverId" element={<DriverLocal />} />
           <Route path="/driver/local" element={<DriverLocal />} />
