@@ -380,18 +380,12 @@ router.get('/invoices', async (req, res) => {
 
 router.post('/invoices', async (req, res) => {
   try {
-    const { id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total } = req.body;
-    let query, params;
-    if (id) {
-      query = `INSERT INTO invoices (id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`;
-      params = [id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total];
-    } else {
-      query = `INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`;
-      params = [type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total];
-    }
-    const { rows } = await pool.query(query, params);
+    const { type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total } = req.body;
+    const { rows } = await pool.query(`
+      INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -400,18 +394,11 @@ router.post('/invoices', async (req, res) => {
 
 router.patch('/invoices/:id/pay', async (req, res) => {
   try {
-    const { eft_number, status } = req.body;
-    if (status === 'pending') {
-      const { rows } = await pool.query(
-        `UPDATE invoices SET status = 'pending', eft_number = NULL, paid_at = NULL WHERE id = $1 RETURNING *`,
-        [req.params.id]
-      );
-      return res.json(rows[0]);
-    }
-    const { rows } = await pool.query(
-      `UPDATE invoices SET status = 'paid', eft_number = $1, paid_at = NOW() WHERE id = $2 RETURNING *`,
-      [eft_number, req.params.id]
-    );
+    const { eft_number } = req.body;
+    const { rows } = await pool.query(`
+      UPDATE invoices SET status = 'paid', eft_number = $1, paid_at = NOW()
+      WHERE id = $2 RETURNING *
+    `, [eft_number, req.params.id]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -515,6 +502,33 @@ router.post('/admin/change-pin', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Update invoice type
+router.patch('/invoices/:id/type', async (req, res) => {
+  try {
+    const { type } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE invoices SET type = $1 WHERE id = $2 RETURNING *`,
+      [type, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Stats for payments page
+router.get('/stats/payments', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        COALESCE(SUM(total) FILTER (WHERE status = 'paid'), 0) as collected_ytd,
+        COALESCE(SUM(total) FILTER (WHERE status = 'pending'), 0) as pending,
+        COALESCE(SUM(total) FILTER (WHERE status = 'overdue'), 0) as overdue
+      FROM invoices
+      WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
+    `);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
@@ -535,12 +549,6 @@ router.get('/gmail/status', async (req, res) => {
     configured: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
     email: process.env.GMAIL_USER || null,
   });
-});
-router.delete('/invoices/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM invoices WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch(err) { res.status(500).json({ error: err.message }); }
 });
 // ── WOOCOMMERCE IMPORT ────────────────────────────────────
 
