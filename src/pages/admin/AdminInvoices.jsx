@@ -2,7 +2,8 @@ import { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CLIENTS, TPS, TVQ, CONTRACT_RATES } from '../../data/store';
 
-const STATUS_BADGE = { paid:'badge-success', pending:'badge-warning', overdue:'badge-danger' };
+const STATUS_BADGE = { paid:'badge-success', pending:'badge-warning', overdue:'badge-danger', draft:'badge-gray' };
+const STATUS_OPTIONS = ['pending','paid','overdue','draft'];
 
 export default function AdminInvoices() {
   const { invoices, addInvoice, fetchInvoices } = useApp();
@@ -11,9 +12,10 @@ export default function AdminInvoices() {
   const [selected,  setSelected]  = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
+  const [deleting,  setDeleting]  = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const fileRef = useRef(null);
 
-  // New invoice form
   const [form, setForm] = useState({
     invNum: '', type:'contract', route:'ontario', client:'beg',
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
@@ -22,7 +24,7 @@ export default function AdminInvoices() {
   const filtered = invoices.filter(inv => tab==='all' ? true : inv.status===tab);
   const fmt = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const getClientName = inv => CLIENTS[inv.client]?.name || inv.client_name || inv.client || '—';
-  const TABS = [['all','All'],['pending','Pending'],['paid','Paid'],['overdue','Overdue']];
+  const TABS = [['all','All'],['pending','Pending'],['paid','Paid'],['overdue','Overdue'],['draft','Draft']];
 
   const calcTotals = () => {
     const sub = (CONTRACT_RATES[form.route]||0) * (form.days||0);
@@ -31,24 +33,57 @@ export default function AdminInvoices() {
 
   const handleCreate = async () => {
     let total = parseFloat(form.amount) || 0;
-    if (form.type === 'contract' && !form.amount) {
-      total = calcTotals().total;
-    }
+    if (form.type === 'contract' && !form.amount) total = calcTotals().total;
     await addInvoice({
-      id: form.invNum,
-      type: form.type,
-      route: form.route,
-      client: form.client,
-      dates: `${form.dateFrom} – ${form.dateTo}`,
-      amount: Math.round(total * 100) / 100,
-      days: form.days,
-      status: form.status,
-      date_from: form.dateFrom,
-      date_to: form.dateTo,
+      id: form.invNum, type: form.type, route: form.route, client: form.client,
+      dates: `${form.dateFrom} – ${form.dateTo}`, amount: Math.round(total * 100) / 100,
+      days: form.days, status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
     });
     await fetchInvoices();
     setShowNew(false);
     setForm({ invNum:'', type:'contract', route:'ontario', client:'beg', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete invoice #${selected.id}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/invoices/${selected.id}`, { method:'DELETE' });
+      await fetchInvoices();
+      setSelected(null);
+    } catch(e) { console.error(e); }
+    setDeleting(false);
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    setUpdatingStatus(true);
+    try {
+      if (newStatus === 'paid') {
+        await fetch(`/api/invoices/${selected.id}/pay`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ eft_number: selected.eft || null }),
+        });
+      } else {
+        await fetch(`/api/invoices/${selected.id}/pay`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ status: newStatus }),
+        });
+      }
+      await fetchInvoices();
+      setSelected(prev => ({ ...prev, status: newStatus }));
+    } catch(e) { console.error(e); }
+    setUpdatingStatus(false);
+  };
+
+  const handleTypeChange = async (newType) => {
+    try {
+      await fetch(`/api/invoices/${selected.id}/type`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ type: newType }),
+      });
+      await fetchInvoices();
+      setSelected(prev => ({ ...prev, type: newType }));
+    } catch(e) { console.error(e); }
   };
 
   const handlePDFUpload = async (invoiceId, file) => {
@@ -59,27 +94,20 @@ export default function AdminInvoices() {
       reader.onload = async (e) => {
         const base64 = e.target.result.split(',')[1];
         const res = await fetch(`/api/invoices/${invoiceId}/upload-pdf`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pdfBase64: base64, filename: file.name }),
         });
         const data = await res.json();
         if (data.success) {
           setUploadMsg('✅ PDF uploaded successfully!');
           await fetchInvoices();
-          // Update selected invoice with new pdf_url
           setSelected(prev => prev ? { ...prev, pdf_url: data.pdf_url } : null);
-        } else {
-          setUploadMsg(`❌ Error: ${data.error}`);
-        }
+        } else { setUploadMsg(`❌ Error: ${data.error}`); }
         setUploading(false);
         setTimeout(() => setUploadMsg(''), 3000);
       };
       reader.readAsDataURL(file);
-    } catch(err) {
-      setUploadMsg(`❌ ${err.message}`);
-      setUploading(false);
-    }
+    } catch(err) { setUploadMsg(`❌ ${err.message}`); setUploading(false); }
   };
 
   return (
@@ -192,6 +220,43 @@ export default function AdminInvoices() {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Status selector */}
+              <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>Status</p>
+                <div className="flex gap-1 flex-wrap">
+                  {STATUS_OPTIONS.map(s => (
+                    <button key={s} onClick={() => handleStatusChange(s)} disabled={updatingStatus}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize"
+                      style={{
+                        background: selected.status===s ? (s==='paid'?'#0F6E56':s==='overdue'?'#991B1B':s==='draft'?'#6B7280':'var(--tn-gold)') : 'white',
+                        color: selected.status===s ? 'white' : 'var(--tn-gold)',
+                        border: '0.5px solid var(--tn-border)',
+                        opacity: updatingStatus ? 0.6 : 1,
+                      }}>
+                      {s==='paid'?'✅ Paid':s==='pending'?'⏳ Pending':s==='overdue'?'🔴 Overdue':'📝 Draft'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Type selector */}
+              <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>Type</p>
+                <div className="flex gap-1">
+                  {['local','contract'].map(t => (
+                    <button key={t} onClick={() => handleTypeChange(t)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
+                      style={{
+                        background: selected.type===t ? 'var(--tn-red)' : 'white',
+                        color: selected.type===t ? 'white' : 'var(--tn-gold)',
+                        border: '0.5px solid var(--tn-border)',
+                      }}>
+                      {t==='local' ? '📦 Local' : '🗺️ Contract'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Invoice info */}
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -279,11 +344,15 @@ export default function AdminInvoices() {
               </div>
 
               <div className="flex gap-2">
+                <button onClick={handleDelete} disabled={deleting}
+                  className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
+                  {deleting ? '...' : '🗑 Delete'}
+                </button>
                 <button onClick={() => setSelected(null)} className="btn btn-outline flex-1 justify-center">Close</button>
                 {selected.pdf_url && (
                   <a href={selected.pdf_url} target="_blank" rel="noreferrer"
                     className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                    ⬇ Download PDF
+                    ⬇ PDF
                   </a>
                 )}
               </div>
