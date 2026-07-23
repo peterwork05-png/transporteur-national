@@ -55,17 +55,10 @@ export default function ClientTracking() {
 
   // Load Mapbox dynamically
   useEffect(() => {
-    if (mapLoaded || !mapRef.current) return;
+    if (mapInstance.current) return;
 
-    const script = document.createElement('script');
-    script.src   = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js';
-    script.async = true;
-    script.onload = () => {
-      const link = document.createElement('link');
-      link.rel   = 'stylesheet';
-      link.href  = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css';
-      document.head.appendChild(link);
-
+    const initMap = () => {
+      if (!mapRef.current) return;
       window.mapboxgl.accessToken = MAPBOX_TOKEN;
       mapInstance.current = new window.mapboxgl.Map({
         container: mapRef.current,
@@ -74,10 +67,25 @@ export default function ClientTracking() {
         zoom: 11,
       });
       mapInstance.current.addControl(new window.mapboxgl.NavigationControl(), 'top-right');
-      setMapLoaded(true);
+      mapInstance.current.on('load', () => setMapLoaded(true));
     };
+
+    if (window.mapboxgl) {
+      initMap();
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel  = 'stylesheet';
+    link.href = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src   = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js';
+    script.async = true;
+    script.onload = initMap;
     document.head.appendChild(script);
-  }, [mapRef.current]);
+  }, []);
 
   // Geocode delivery address and add marker
   useEffect(() => {
