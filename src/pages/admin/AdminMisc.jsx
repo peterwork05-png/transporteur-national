@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 
 const ROLE_OPTIONS = [
@@ -272,21 +272,61 @@ export function AdminDrivers() {
 }
 
 export function AdminSettings() {
-  const [clients, setClients] = useState([
-    { id:'beg',     name:'Bureau en Gros #299',  email:'beg@staples.ca',    password:'staples2026',  active:true },
-    { id:'jonarts', name:'Jonarts Printing',      email:'orders@jonarts.ca', password:'jonarts2026',  active:true },
-    { id:'aebath',  name:'A&E Bath and Shower',   email:'aebath@gmail.com',  password:'aebath2026',   active:true },
-  ]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newClient, setNewClient] = useState({ name:'', email:'', password:'' });
-  const [showPasswords, setShowPasswords] = useState({});
+  const [clients,      setClients]      = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [newClient,    setNewClient]    = useState({ name:'', email:'', password:'', role:'ops' });
+  const [showPasswords,setShowPasswords]= useState({});
+  const [saving,       setSaving]       = useState(false);
+
   const togglePass = (id) => setShowPasswords(p => ({...p, [id]: !p[id]}));
 
-  const admins = [
-    { initials:'AD', name:'Admin (You)',  role:'Owner',          color:'var(--tn-red)' },
-    { initials:'SB', name:'Sophie B.',    role:'Office Manager', color:'var(--tn-gold)' },
-    { initials:'KL', name:'Kevin L.',     role:'Dispatcher',     color:'#185FA5' },
-  ];
+  const fetchClients = async () => {
+    try {
+      const res  = await fetch('/api/clients/portal');
+      const data = await res.json();
+      setClients(Array.isArray(data) ? data : []);
+    } catch(e) { console.error(e); }
+    setLoadingClients(false);
+  };
+
+  useEffect(() => { fetchClients(); }, []);
+
+  const handleAddClient = async () => {
+    if (!newClient.name || !newClient.email || !newClient.password) return;
+    setSaving(true);
+    try {
+      const id = newClient.name.toLowerCase().replace(/\s+/g,'_') + '_' + Date.now();
+      await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newClient, id, language:'fr', signoff:'MERCI DE VOTRE CONFIANCE!', client_group: id }),
+      });
+      await fetchClients();
+      setNewClient({ name:'', email:'', password:'', role:'ops' });
+      setShowAdd(false);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const handleDisable = async (id) => {
+    try {
+      await fetch(`/api/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false }),
+      });
+      await fetchClients();
+    } catch(e) { console.error(e); }
+  };
+
+  // Group clients by client_group
+  const grouped = clients.reduce((acc, c) => {
+    const group = c.client_group || c.id;
+    if (!acc[group]) acc[group] = { name: c.name, logins: [] };
+    acc[group].logins.push(c);
+    return acc;
+  }, {});
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-2xl">
@@ -295,51 +335,65 @@ export function AdminSettings() {
         <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Admin users, client logins & preferences</p>
       </div>
 
+      {/* Admin PIN */}
       <div className="card p-4">
         <h2 className="font-semibold text-sm mb-3">Admin PIN</h2>
         <div className="flex items-center justify-between p-3 rounded-xl" style={{background:'var(--tn-warm)'}}>
           <div>
             <p className="text-sm font-medium">Admin access PIN</p>
-            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Used to access the admin dashboard</p>
+            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Current PIN: 1234</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm px-3 py-1 rounded-lg" style={{background:'white',border:'0.5px solid var(--tn-border)'}}>••••</span>
-            <button className="btn btn-outline btn-sm">Change</button>
-          </div>
+          <span className="font-mono text-sm px-3 py-1 rounded-lg" style={{background:'white',border:'0.5px solid var(--tn-border)'}}>••••</span>
         </div>
       </div>
 
+      {/* Client portal logins */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
           <h2 className="font-semibold text-sm">Client portal logins</h2>
           <button onClick={() => setShowAdd(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add client</button>
         </div>
-        {clients.map(client => (
-          <div key={client.id} className="p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="font-medium text-sm">{client.name}</p>
-              <div className="flex gap-2">
-                <button className="btn btn-outline btn-sm">Edit</button>
-                <button className="btn btn-sm" style={{background:'#FEE2E2',color:'#991B1B'}}>Disable</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg p-2" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs" style={{color:'var(--tn-gold)'}}>Email</p>
-                <p className="text-sm font-medium truncate">{client.email}</p>
-              </div>
-              <div className="rounded-lg p-2 flex items-center justify-between" style={{background:'var(--tn-warm)'}}>
-                <div>
-                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>Password</p>
-                  <p className="text-sm font-mono">{showPasswords[client.id] ? client.password : '••••••••'}</p>
+
+        {loadingClients ? (
+          <div className="p-6 text-center text-sm" style={{color:'var(--tn-gold)'}}>Loading...</div>
+        ) : Object.keys(grouped).length === 0 ? (
+          <div className="p-6 text-center text-sm" style={{color:'var(--tn-gold)'}}>No client logins found</div>
+        ) : Object.entries(grouped).map(([group, { name, logins }]) => (
+          <div key={group} className="p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
+            <p className="font-semibold text-sm mb-3">{name}</p>
+            {logins.map(client => (
+              <div key={client.id} className="mb-3 last:mb-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`badge ${client.role==='finance'?'badge-info':'badge-gray'}`}>
+                    {client.role==='finance'?'Finance':'Operations'}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleDisable(client.id)}
+                      className="btn btn-sm" style={{background:'#FEE2E2',color:'#991B1B',fontSize:'11px'}}>
+                      Disable
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => togglePass(client.id)} className="text-xs" style={{color:'var(--tn-gold)'}}>
-                  {showPasswords[client.id] ? 'Hide' : 'Show'}
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg p-2" style={{background:'var(--tn-warm)'}}>
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>Email</p>
+                    <p className="text-sm font-medium truncate">{client.email}</p>
+                  </div>
+                  <div className="rounded-lg p-2 flex items-center justify-between" style={{background:'var(--tn-warm)'}}>
+                    <div>
+                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Password</p>
+                      <p className="text-sm font-mono">{showPasswords[client.id] ? client.password : '••••••••'}</p>
+                    </div>
+                    <button onClick={() => togglePass(client.id)} className="text-xs" style={{color:'var(--tn-gold)'}}>
+                      {showPasswords[client.id] ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         ))}
+
         {showAdd && (
           <div className="p-4" style={{background:'var(--tn-warm)'}}>
             <p className="font-medium text-sm mb-3">New client login</p>
@@ -350,39 +404,30 @@ export function AdminSettings() {
                 <input type="email" className="input" placeholder="client@company.com" value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
               <div><label className="label">Password</label>
                 <input className="input" placeholder="Set a password" value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
+              <div><label className="label">Access level</label>
+                <select className="input" value={newClient.role} onChange={e=>setNewClient(c=>({...c,role:e.target.value}))}>
+                  <option value="ops">Operations (orders only)</option>
+                  <option value="finance">Finance (orders + invoices)</option>
+                </select>
+              </div>
             </div>
             <div className="flex gap-2 mt-3">
               <button onClick={() => setShowAdd(false)} className="btn btn-outline btn-sm flex-1 justify-center">Cancel</button>
-              <button onClick={() => {
-                if (newClient.name && newClient.email && newClient.password) {
-                  setClients(prev => [...prev, { id: Date.now().toString(), ...newClient, active:true }]);
-                  setNewClient({ name:'', email:'', password:'' });
-                  setShowAdd(false);
-                }
-              }} className="btn btn-sm flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                Create login
+              <button onClick={handleAddClient} disabled={saving}
+                className="btn btn-sm flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                {saving ? 'Creating...' : 'Create login'}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-          <h2 className="font-semibold text-sm">Admin users</h2>
-        </div>
-        {admins.map((a, i) => (
-          <div key={i} className="flex items-center gap-3 p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{background:a.color}}>{a.initials}</div>
-            <div className="flex-1">
-              <p className="font-medium text-sm">{a.name}</p>
-              <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{a.role}</p>
-            </div>
-            <button className="btn btn-outline btn-sm">Edit</button>
-          </div>
-        ))}
-        <div className="p-4">
-          <button className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add admin user</button>
+      {/* Admin users - just show PIN info for now */}
+      <div className="card p-4">
+        <h2 className="font-semibold text-sm mb-3">Admin access</h2>
+        <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+          <p className="text-sm font-medium">Admin dashboard</p>
+          <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Access via PIN: 1234 on the login screen</p>
         </div>
       </div>
     </div>
