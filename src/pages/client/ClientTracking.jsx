@@ -8,7 +8,7 @@ const STATUS_INFO = {
   delivered: { label:'Delivered',     color:'#0F6E56', icon:'✅' },
 };
 
-const MAPBOX_TOKEN = 'pk.eyJ1IjoidHJhbnNwb3J0ZXVybmF0aW9uYWxtYyIsImEiOiJjbXJ3YzIzaTcwNHFyMnlvZDRqZ3N4ZmZ3In0.IKDUZdNanbw4y7N_oEEh6Q';
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export default function ClientTracking() {
   const { orderId } = useParams();
@@ -183,7 +183,7 @@ export default function ClientTracking() {
   const rank = ['waiting','picked','enroute','delivered'].indexOf(order?.status);
 
   return (
-    <div style={{display:'flex', flexDirection:'column', height:'100vh', background:'var(--tn-cream)'}}>
+    <div style={{background:'var(--tn-cream)', minHeight:'100vh'}}>
 
       {/* Header */}
       <div style={{flexShrink:0, padding:'12px 16px', background:'var(--tn-dark)', borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
@@ -205,7 +205,7 @@ export default function ClientTracking() {
       </div>
 
       {/* Map container */}
-      <div ref={mapRef} style={{flex:1, minHeight:'250px'}} />
+      <div ref={mapRef} style={{width:'100%', height:'400px', background:'#e8e8e8'}} />
 
       {/* Info panel */}
       <div style={{flexShrink:0, padding:'16px', background:'var(--tn-cream)', borderTop:'0.5px solid var(--tn-border)', maxHeight:'45vh', overflowY:'auto'}}>
