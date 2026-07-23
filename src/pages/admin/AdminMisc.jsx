@@ -272,12 +272,22 @@ export function AdminDrivers() {
 }
 
 export function AdminSettings() {
-  const [clients,      setClients]      = useState([]);
-  const [loadingClients, setLoadingClients] = useState(true);
-  const [showAdd,      setShowAdd]      = useState(false);
-  const [newClient,    setNewClient]    = useState({ name:'', email:'', password:'', role:'ops' });
-  const [showPasswords,setShowPasswords]= useState({});
-  const [saving,       setSaving]       = useState(false);
+  const [clients,       setClients]       = useState([]);
+  const [loadingClients,setLoadingClients]= useState(true);
+  const [showAdd,       setShowAdd]       = useState(false);
+  const [newClient,     setNewClient]     = useState({ name:'', email:'', password:'', role:'ops', client_group:'' });
+  const [showPasswords, setShowPasswords] = useState({});
+  const [saving,        setSaving]        = useState(false);
+  const [editClient,    setEditClient]    = useState(null);
+
+  // Admin PIN
+  const [showPinModal,  setShowPinModal]  = useState(false);
+  const [currentPin,    setCurrentPin]    = useState('');
+  const [newPin,        setNewPin]        = useState('');
+  const [confirmPin,    setConfirmPin]    = useState('');
+  const [pinError,      setPinError]      = useState('');
+  const [pinSuccess,    setPinSuccess]    = useState(false);
+  const [adminPin,      setAdminPin]      = useState('••••');
 
   const togglePass = (id) => setShowPasswords(p => ({...p, [id]: !p[id]}));
 
@@ -297,19 +307,21 @@ export function AdminSettings() {
     setSaving(true);
     try {
       const id = newClient.name.toLowerCase().replace(/\s+/g,'_') + '_' + Date.now();
+      const group = newClient.client_group || id;
       await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newClient, id, language:'fr', signoff:'MERCI DE VOTRE CONFIANCE!', client_group: id }),
+        body: JSON.stringify({ ...newClient, id, language:'fr', signoff:'MERCI DE VOTRE CONFIANCE!', client_group: group }),
       });
       await fetchClients();
-      setNewClient({ name:'', email:'', password:'', role:'ops' });
+      setNewClient({ name:'', email:'', password:'', role:'ops', client_group:'' });
       setShowAdd(false);
     } catch(e) { console.error(e); }
     setSaving(false);
   };
 
   const handleDisable = async (id) => {
+    if (!window.confirm('Disable this login? The client will no longer be able to sign in.')) return;
     try {
       await fetch(`/api/clients/${id}`, {
         method: 'PATCH',
@@ -320,6 +332,38 @@ export function AdminSettings() {
     } catch(e) { console.error(e); }
   };
 
+  const handleUpdateRole = async (id, newRole) => {
+    try {
+      await fetch(`/api/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
+      await fetchClients();
+    } catch(e) { console.error(e); }
+  };
+
+  const handleChangePin = async () => {
+    setPinError('');
+    if (newPin.length !== 4 || isNaN(newPin)) return setPinError('PIN must be exactly 4 digits');
+    if (newPin !== confirmPin) return setPinError('PINs do not match');
+    try {
+      const res  = await fetch('/api/admin/change-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPin, newPin }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPinSuccess(true);
+        setAdminPin('••••');
+        setTimeout(() => { setShowPinModal(false); setPinSuccess(false); setCurrentPin(''); setNewPin(''); setConfirmPin(''); }, 1500);
+      } else {
+        setPinError(data.error || 'Current PIN is incorrect');
+      }
+    } catch(e) { setPinError('Error changing PIN'); }
+  };
+
   // Group clients by client_group
   const grouped = clients.reduce((acc, c) => {
     const group = c.client_group || c.id;
@@ -327,6 +371,9 @@ export function AdminSettings() {
     acc[group].logins.push(c);
     return acc;
   }, {});
+
+  // Unique company groups for dropdown
+  const companyGroups = Object.entries(grouped).map(([group, { name }]) => ({ group, name }));
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-2xl">
@@ -341,17 +388,25 @@ export function AdminSettings() {
         <div className="flex items-center justify-between p-3 rounded-xl" style={{background:'var(--tn-warm)'}}>
           <div>
             <p className="text-sm font-medium">Admin access PIN</p>
-            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Current PIN: 1234</p>
+            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Used to access the admin dashboard</p>
           </div>
-          <span className="font-mono text-sm px-3 py-1 rounded-lg" style={{background:'white',border:'0.5px solid var(--tn-border)'}}>••••</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm px-3 py-1 rounded-lg" style={{background:'white',border:'0.5px solid var(--tn-border)'}}>
+              {adminPin}
+            </span>
+            <button onClick={() => setShowPinModal(true)} className="btn btn-outline btn-sm">Change</button>
+          </div>
         </div>
       </div>
 
       {/* Client portal logins */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-          <h2 className="font-semibold text-sm">Client portal logins</h2>
-          <button onClick={() => setShowAdd(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add client</button>
+          <div>
+            <h2 className="font-semibold text-sm">Client portal logins</h2>
+            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Manage who can access the client portal and what they see</p>
+          </div>
+          <button onClick={() => setShowAdd(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add</button>
         </div>
 
         {loadingClients ? (
@@ -360,32 +415,51 @@ export function AdminSettings() {
           <div className="p-6 text-center text-sm" style={{color:'var(--tn-gold)'}}>No client logins found</div>
         ) : Object.entries(grouped).map(([group, { name, logins }]) => (
           <div key={group} className="p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
-            <p className="font-semibold text-sm mb-3">{name}</p>
+            <p className="font-semibold text-sm mb-3" style={{color:'var(--tn-dark)'}}>{name}</p>
             {logins.map(client => (
-              <div key={client.id} className="mb-3 last:mb-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`badge ${client.role==='finance'?'badge-info':'badge-gray'}`}>
-                    {client.role==='finance'?'Finance':'Operations'}
-                  </span>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleDisable(client.id)}
-                      className="btn btn-sm" style={{background:'#FEE2E2',color:'#991B1B',fontSize:'11px'}}>
-                      Disable
-                    </button>
-                  </div>
+              <div key={client.id} className="mb-3 last:mb-0 rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                {/* Email row */}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium truncate flex-1">{client.email}</p>
+                  <button onClick={() => handleDisable(client.id)}
+                    className="text-xs ml-2 flex-shrink-0 px-2 py-1 rounded-lg"
+                    style={{background:'#FEE2E2',color:'#991B1B'}}>
+                    Disable
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg p-2" style={{background:'var(--tn-warm)'}}>
-                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>Email</p>
-                    <p className="text-sm font-medium truncate">{client.email}</p>
+
+                {/* Password row */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>Password:</p>
+                    <p className="text-sm font-mono">{showPasswords[client.id] ? client.password : '••••••••'}</p>
                   </div>
-                  <div className="rounded-lg p-2 flex items-center justify-between" style={{background:'var(--tn-warm)'}}>
-                    <div>
-                      <p className="text-xs" style={{color:'var(--tn-gold)'}}>Password</p>
-                      <p className="text-sm font-mono">{showPasswords[client.id] ? client.password : '••••••••'}</p>
-                    </div>
-                    <button onClick={() => togglePass(client.id)} className="text-xs" style={{color:'var(--tn-gold)'}}>
-                      {showPasswords[client.id] ? 'Hide' : 'Show'}
+                  <button onClick={() => togglePass(client.id)} className="text-xs" style={{color:'var(--tn-gold)'}}>
+                    {showPasswords[client.id] ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+
+                {/* Access level toggle */}
+                <div>
+                  <p className="text-xs mb-1.5" style={{color:'var(--tn-gold)'}}>Access level</p>
+                  <div className="flex gap-1 p-1 rounded-xl" style={{background:'rgba(139,105,20,0.08)',width:'fit-content'}}>
+                    <button
+                      onClick={() => handleUpdateRole(client.id, 'ops')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{
+                        background: client.role === 'ops' ? 'var(--tn-red)' : 'transparent',
+                        color: client.role === 'ops' ? 'white' : 'var(--tn-gold)',
+                      }}>
+                      📦 Orders only
+                    </button>
+                    <button
+                      onClick={() => handleUpdateRole(client.id, 'finance')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{
+                        background: client.role === 'finance' ? 'var(--tn-red)' : 'transparent',
+                        color: client.role === 'finance' ? 'white' : 'var(--tn-gold)',
+                      }}>
+                      💳 Orders + Invoices
                     </button>
                   </div>
                 </div>
@@ -394,21 +468,46 @@ export function AdminSettings() {
           </div>
         ))}
 
+        {/* Add new client form */}
         {showAdd && (
           <div className="p-4" style={{background:'var(--tn-warm)'}}>
             <p className="font-medium text-sm mb-3">New client login</p>
             <div className="space-y-2">
-              <div><label className="label">Client name</label>
-                <input className="input" placeholder="e.g. New Client Inc." value={newClient.name} onChange={e=>setNewClient(c=>({...c,name:e.target.value}))} /></div>
+              <div>
+                <label className="label">Client company</label>
+                <div className="flex gap-2">
+                  <select className="input flex-1" value={newClient.client_group}
+                    onChange={e => {
+                      const g = e.target.value;
+                      const found = companyGroups.find(c => c.group === g);
+                      setNewClient(c => ({...c, client_group: g, name: found?.name || c.name}));
+                    }}>
+                    <option value="">— New company —</option>
+                    {companyGroups.map(cg => <option key={cg.group} value={cg.group}>{cg.name}</option>)}
+                  </select>
+                </div>
+                {!newClient.client_group && (
+                  <input className="input mt-2" placeholder="Company name (e.g. Jonarts Printing)"
+                    value={newClient.name} onChange={e=>setNewClient(c=>({...c,name:e.target.value}))} />
+                )}
+              </div>
               <div><label className="label">Email</label>
-                <input type="email" className="input" placeholder="client@company.com" value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
+                <input type="email" className="input" placeholder="client@company.com"
+                  value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
               <div><label className="label">Password</label>
-                <input className="input" placeholder="Set a password" value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
-              <div><label className="label">Access level</label>
-                <select className="input" value={newClient.role} onChange={e=>setNewClient(c=>({...c,role:e.target.value}))}>
-                  <option value="ops">Operations (orders only)</option>
-                  <option value="finance">Finance (orders + invoices)</option>
-                </select>
+                <input className="input" placeholder="Set a password"
+                  value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
+              <div>
+                <label className="label">Access level</label>
+                <div className="flex gap-1 p-1 rounded-xl" style={{background:'rgba(139,105,20,0.08)',width:'fit-content'}}>
+                  {[['ops','📦 Orders only'],['finance','💳 Orders + Invoices']].map(([val,label]) => (
+                    <button key={val} onClick={() => setNewClient(c=>({...c,role:val}))}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                      style={{background:newClient.role===val?'var(--tn-red)':'transparent', color:newClient.role===val?'white':'var(--tn-gold)'}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-3">
@@ -422,14 +521,53 @@ export function AdminSettings() {
         )}
       </div>
 
-      {/* Admin users - just show PIN info for now */}
-      <div className="card p-4">
-        <h2 className="font-semibold text-sm mb-3">Admin access</h2>
-        <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-          <p className="text-sm font-medium">Admin dashboard</p>
-          <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Access via PIN: 1234 on the login screen</p>
+      {/* Change PIN modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}
+          onClick={() => setShowPinModal(false)}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{background:'var(--tn-dark)'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Change admin PIN</p>
+              <button onClick={() => setShowPinModal(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-3">
+              {pinSuccess ? (
+                <div className="text-center py-4">
+                  <p className="text-3xl mb-2">✅</p>
+                  <p className="font-semibold">PIN changed successfully!</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="label">Current PIN</label>
+                    <input type="password" className="input" placeholder="Enter current PIN" maxLength={4}
+                      value={currentPin} onChange={e=>setCurrentPin(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">New PIN</label>
+                    <input type="password" className="input" placeholder="4-digit PIN" maxLength={4}
+                      value={newPin} onChange={e=>setNewPin(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">Confirm new PIN</label>
+                    <input type="password" className="input" placeholder="Repeat new PIN" maxLength={4}
+                      value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} />
+                  </div>
+                  {pinError && <p className="text-xs px-3 py-2 rounded-lg" style={{background:'#FEE2E2',color:'#991B1B'}}>{pinError}</p>}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setShowPinModal(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                    <button onClick={handleChangePin} disabled={!currentPin||!newPin||!confirmPin}
+                      className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white',opacity:currentPin&&newPin&&confirmPin?1:0.5}}>
+                      Save new PIN
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
