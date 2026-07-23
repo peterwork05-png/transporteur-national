@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createTables, seedData } from './src/db/schema.js';
+import { startScheduler } from './src/api/scheduler.js';
 import apiRoutes from './src/api/routes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,6 +32,7 @@ app.listen(PORT, async () => {
     try {
       await createTables();
       await seedData();
+      startScheduler();
       console.log('✅ Database ready');
     } catch (err) {
       console.error('❌ Database initialization error:', err);
