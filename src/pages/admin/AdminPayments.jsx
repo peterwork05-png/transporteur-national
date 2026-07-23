@@ -321,9 +321,10 @@ function ReminderButton({ inv, getClientName, fmt }) {
   const [loadingPreview,setLoadingPreview]= useState(false);
 
   // Editable fields
-  const [editTo,      setEditTo]      = useState('');
-  const [editSubject, setEditSubject] = useState('');
-  const [editNote,    setEditNote]    = useState('');
+  const [editTo,           setEditTo]           = useState('');
+  const [editSubject,      setEditSubject]      = useState('');
+  const [editNote,         setEditNote]         = useState('');
+  const [showFullPreview,  setShowFullPreview]  = useState(false);
 
   const loadPreview = async () => {
     setLoadingPreview(true);
@@ -339,6 +340,7 @@ function ReminderButton({ inv, getClientName, fmt }) {
         setEditTo(data.to);
         setEditSubject(data.subject);
         setEditNote('');
+        setShowFullPreview(false);
       } else { setError(data.error || 'Could not load preview'); }
     } catch(e) { setError(e.message); }
     setLoadingPreview(false);
@@ -407,7 +409,7 @@ function ReminderButton({ inv, getClientName, fmt }) {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span style={{color:'var(--tn-gold)'}}>Period</span>
-                    <span className="font-medium">{preview.dateFrom} – {preview.dateTo}</span>
+                    <span className="font-medium">{String(preview.dateFrom).split('T')[0]} – {String(preview.dateTo).split('T')[0]}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span style={{color:'var(--tn-gold)'}}>Type</span>
@@ -418,6 +420,43 @@ function ReminderButton({ inv, getClientName, fmt }) {
                     <span style={{color:'var(--tn-red)'}}>{preview.total}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Full email preview toggle */}
+              <div className="rounded-xl overflow-hidden" style={{border:'0.5px solid var(--tn-border)'}}>
+                <button
+                  onClick={() => setShowFullPreview(p => !p)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+                  style={{background:'var(--tn-warm)'}}>
+                  <span>👁 Preview full email</span>
+                  <span style={{color:'var(--tn-gold)'}}>{showFullPreview ? '▲ Hide' : '▼ Show'}</span>
+                </button>
+                {showFullPreview && (
+                  <div className="p-4 text-xs space-y-2" style={{background:'white', color:'#1A1208', lineHeight:'1.6'}}>
+                    {editNote && (
+                      <div style={{background:'#FEF3C7',borderRadius:'6px',padding:'8px',border:'1px solid #D97706',marginBottom:'8px'}}>
+                        <p style={{color:'#92400E',margin:0}}>{editNote}</p>
+                      </div>
+                    )}
+                    <p>Bonjour / Hello,</p>
+                    <p>Ceci est un rappel amical concernant la facture suivante qui est toujours en attente de paiement.</p>
+                    <p>This is a friendly reminder regarding the following invoice which is still pending payment.</p>
+                    <div style={{background:'#FAF7F0',borderRadius:'8px',padding:'12px',border:'1px solid #e0d9cc',margin:'8px 0'}}>
+                      <p style={{margin:'2px 0'}}><strong>Invoice #:</strong> #{inv.id}</p>
+                      <p style={{margin:'2px 0'}}><strong>Period:</strong> {String(preview.dateFrom).split('T')[0]} – {String(preview.dateTo).split('T')[0]}</p>
+                      <p style={{margin:'2px 0'}}><strong>Type:</strong> {inv.type==='contract'?`Contract · ${inv.route} route`:'Local deliveries'}</p>
+                      <p style={{margin:'8px 0 2px',fontWeight:'bold',color:'#C0392B',fontSize:'14px'}}><strong>TOTAL DUE: {preview.total}</strong></p>
+                    </div>
+                    {preview.hasPdf && <p>📄 <span style={{color:'#C0392B'}}>Invoice PDF link will be included</span></p>}
+                    <p>Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
+                    <div style={{background:'#FAF7F0',borderRadius:'6px',padding:'8px',border:'1px solid #e0d9cc'}}>
+                      <p style={{margin:0}}><strong>Transporteur National MC INC.</strong></p>
+                      <p style={{margin:'2px 0',color:'#8B6914'}}>TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+                    </div>
+                    <p>Si vous avez des questions, n'hésitez pas à nous contacter. / If you have any questions, please don't hesitate to contact us.</p>
+                    <p>Merci / Thank you,<br/><strong>Transporteur National MC INC.</strong><br/>📧 transporteurnationalmc@gmail.com</p>
+                  </div>
+                )}
               </div>
 
               {/* Personal note */}
