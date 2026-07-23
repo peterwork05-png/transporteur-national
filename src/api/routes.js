@@ -529,12 +529,54 @@ router.get('/stats/payments', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// Send payment reminder email
-router.post('/invoices/send-reminder', async (req, res) => {
+// Preview reminder email
+router.post('/invoices/reminder-preview', async (req, res) => {
   try {
     const { invoiceId } = req.body;
 
-    // Get invoice with client info
+    const { rows } = await pool.query(`
+      SELECT i.*, c.name as client_name, c.email as client_email, c.client_group
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.id = $1
+    `, [invoiceId]);
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = rows[0];
+
+    const { rows: contacts } = await pool.query(`
+      SELECT email FROM clients 
+      WHERE client_group = (SELECT client_group FROM clients WHERE id = $1 LIMIT 1)
+      AND role = 'finance' AND active = true
+    `, [inv.client_id]);
+
+    if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found for this client' });
+
+    const toEmails = contacts.map(c => c.email).join(', ');
+    const total    = `$${parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 })}`;
+    const dateFrom = inv.date_from ? inv.date_from.toString().split('T')[0] : '';
+    const dateTo   = inv.date_to   ? inv.date_to.toString().split('T')[0]   : '';
+
+    res.json({
+      success: true,
+      to: toEmails,
+      subject: `Rappel de paiement / Payment Reminder — Invoice #${invoiceId}`,
+      dateFrom,
+      dateTo,
+      total,
+      hasPdf: !!inv.pdf_url,
+      clientName: inv.client_name,
+    });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Send payment reminder email
+router.post('/invoices/send-reminder', async (req, res) => {
+  try {
+    const { invoiceId, to, subject, note } = req.body;
+
     const { rows } = await pool.query(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
@@ -545,37 +587,50 @@ router.post('/invoices/send-reminder', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
     const inv = rows[0];
 
-    // Find finance email for this client group
-    const { rows: contacts } = await pool.query(`
-      SELECT email FROM clients 
-      WHERE client_group = (SELECT client_group FROM clients WHERE id = $1 LIMIT 1)
-      AND role = 'finance' AND active = true
-    `, [inv.client_id]);
+    // Use provided 'to' or fall back to finance contacts
+    let toEmails = to;
+    if (!toEmails) {
+      const { rows: contacts } = await pool.query(`
+        SELECT email FROM clients 
+        WHERE client_group = (SELECT client_group FROM clients WHERE id = $1 LIMIT 1)
+        AND role = 'finance' AND active = true
+      `, [inv.client_id]);
+      if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found' });
+      toEmails = contacts.map(c => c.email).join(', ');
+    }
 
-    if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found for this client' });
-
-    const toEmails = contacts.map(c => c.email).join(', ');
-    const total    = parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 });
+    const emailSubject = subject || `Rappel de paiement / Payment Reminder — Invoice #${invoiceId}`;
+    const total    = `$${parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 })}`;
     const dateFrom = inv.date_from ? inv.date_from.toString().split('T')[0] : '';
     const dateTo   = inv.date_to   ? inv.date_to.toString().split('T')[0]   : '';
 
-    // Send email via nodemailer
     const nodemailer = await import('nodemailer');
     const transporter = nodemailer.default.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
       },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
     });
 
-    const subject = `Rappel de paiement / Payment Reminder — Invoice #${inv.id}`;
+    const noteHtml = note ? `
+      <div style="background:#FEF3C7;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #D97706">
+        <p style="margin:0;color:#92400E;font-size:13px">${note}</p>
+      </div>` : '';
+
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-        <div style="background:#1A1208;padding:20px;text-align:center">
+        <div style="background:#1A1208;padding:20px;text-align:center;border-radius:12px 12px 0 0">
           <h1 style="color:#FAF7F0;margin:0;font-size:20px">🦅 Transporteur National MC INC.</h1>
         </div>
         <div style="padding:30px;background:#FAF7F0">
+          ${noteHtml}
           <p style="color:#1A1208">Bonjour / Hello,</p>
           <p style="color:#1A1208">Ceci est un rappel amical concernant la facture suivante qui est toujours en attente de paiement.</p>
           <p style="color:#1A1208">This is a friendly reminder regarding the following invoice which is still pending payment.</p>
@@ -587,7 +642,7 @@ router.post('/invoices/send-reminder', async (req, res) => {
               <tr><td style="color:#8B6914;font-size:12px;padding:4px 0">Type</td><td style="padding:4px 0">${inv.type === 'contract' ? `Contract · ${inv.route} route` : 'Local deliveries'}</td></tr>
               <tr style="border-top:1px solid #e0d9cc">
                 <td style="color:#8B6914;font-size:12px;padding:8px 0 4px;font-weight:bold">TOTAL DUE</td>
-                <td style="padding:8px 0 4px;font-weight:bold;font-size:18px;color:#C0392B">$${total}</td>
+                <td style="padding:8px 0 4px;font-weight:bold;font-size:18px;color:#C0392B">${total}</td>
               </tr>
             </table>
           </div>
@@ -604,7 +659,7 @@ router.post('/invoices/send-reminder', async (req, res) => {
           <p style="color:#1A1208">Merci / Thank you,<br><strong>Transporteur National MC INC.</strong><br>
           📧 transporteurnationalmc@gmail.com</p>
         </div>
-        <div style="background:#1A1208;padding:12px;text-align:center">
+        <div style="background:#1A1208;padding:12px;text-align:center;border-radius:0 0 12px 12px">
           <p style="color:rgba(250,247,240,0.4);font-size:11px;margin:0">MERCI DE VOTRE CONFIANCE!</p>
         </div>
       </div>
@@ -613,7 +668,7 @@ router.post('/invoices/send-reminder', async (req, res) => {
     await transporter.sendMail({
       from: `"Transporteur National MC" <${process.env.GMAIL_USER}>`,
       to: toEmails,
-      subject,
+      subject: emailSubject,
       html,
     });
 
