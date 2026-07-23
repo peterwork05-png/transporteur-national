@@ -536,6 +536,12 @@ router.get('/gmail/status', async (req, res) => {
     email: process.env.GMAIL_USER || null,
   });
 });
+router.delete('/invoices/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM invoices WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 // ── WOOCOMMERCE IMPORT ────────────────────────────────────
 
 router.post('/import/woocommerce', async (req, res) => {
