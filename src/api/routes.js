@@ -457,6 +457,36 @@ router.get('/drivers/:id/location', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Get all portal clients (for settings page)
+router.get('/clients/portal', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, name, email, password, role, client_group, active
+      FROM clients 
+      WHERE active = true 
+      AND role IS NOT NULL
+      AND email IS NOT NULL
+      ORDER BY client_group, role DESC
+    `);
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Disable a client
+router.patch('/clients/:id', async (req, res) => {
+  try {
+    const { active, password, name } = req.body;
+    const { rows } = await pool.query(`
+      UPDATE clients SET
+        active   = COALESCE($1, active),
+        password = COALESCE($2, password),
+        name     = COALESCE($3, name)
+      WHERE id = $4 RETURNING id, name, email, role, client_group, active
+    `, [active, password, name, req.params.id]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
