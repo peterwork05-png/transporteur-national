@@ -472,18 +472,33 @@ router.get('/clients/portal', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// Disable a client
+// Disable/update a client
 router.patch('/clients/:id', async (req, res) => {
   try {
-    const { active, password, name } = req.body;
+    const { active, password, name, role } = req.body;
     const { rows } = await pool.query(`
       UPDATE clients SET
         active   = COALESCE($1, active),
         password = COALESCE($2, password),
-        name     = COALESCE($3, name)
-      WHERE id = $4 RETURNING id, name, email, role, client_group, active
-    `, [active, password, name, req.params.id]);
+        name     = COALESCE($3, name),
+        role     = COALESCE($4, role)
+      WHERE id = $5 RETURNING id, name, email, role, client_group, active
+    `, [active, password, name, role, req.params.id]);
     res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Change admin PIN
+router.post('/admin/change-pin', async (req, res) => {
+  try {
+    const { currentPin, newPin } = req.body;
+    const { rows } = await pool.query(
+      'SELECT * FROM admin_users WHERE pin = $1 AND active = true LIMIT 1',
+      [currentPin]
+    );
+    if (rows.length === 0) return res.status(401).json({ error: 'Current PIN is incorrect' });
+    await pool.query('UPDATE admin_users SET pin = $1 WHERE active = true', [newPin]);
+    res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
