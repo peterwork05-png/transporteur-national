@@ -18,11 +18,16 @@ const fmt    = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFraction
 const fmtDate = d => d ? String(d).split('T')[0] : '—';
 
 // Auto-determine if invoice is overdue (pending + older than 14 days)
-const isOverdue = inv => {x
-  if (inv.status === 'paid') return false;
-  const created = new Date(inv.created_at || inv.date_from);
-  const days = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
-  return days > 14;
+const isOverdue = inv => {
+  try {
+    if (!inv || inv.status === 'paid') return false;
+    const dateStr = inv.created_at || inv.date_from;
+    if (!dateStr) return false;
+    const created = new Date(dateStr);
+    if (isNaN(created.getTime())) return false;
+    const days = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    return days > 14;
+  } catch(e) { return false; }
 };
 
 export default function ClientPortal() {
@@ -280,7 +285,7 @@ export default function ClientPortal() {
                       )}
                       {(order.status==='enroute'||order.status==='picked') && (
                         <div className="flex items-center gap-2 mt-1 pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse flex-shrink-0"/>
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:'#185FA5'}}/>
                           <a href={`/track/${order.id}`} target="_blank" rel="noreferrer"
                             className="text-xs font-medium" style={{color:'#185FA5'}}
                             onClick={e=>e.stopPropagation()}>
