@@ -8,8 +8,7 @@ const STATUS_INFO = {
   delivered: { label:'Delivered',     color:'#0F6E56', icon:'✅' },
 };
 
-const TOKEN = 'pk.eyJ1IjoidHJhbnNwb3J0ZXVybmF0aW9uYWxtYyIsImEiOiJjbXJ3YzIzaTcwNHFyMnlvZDRqZ3N4ZmZ3In0.IKDUZdNanbw4y7N_oEEh6Q';
-
+const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 export default function ClientTracking() {
   const { orderId } = useParams();
   const mapRef = useRef(null);
