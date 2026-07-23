@@ -18,7 +18,7 @@ const fmt    = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFraction
 const fmtDate = d => d ? String(d).split('T')[0] : '—';
 
 // Auto-determine if invoice is overdue (pending + older than 14 days)
-const isOverdue = inv => {
+const isOverdue = inv => {x
   if (inv.status === 'paid') return false;
   const created = new Date(inv.created_at || inv.date_from);
   const days = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
@@ -160,7 +160,7 @@ export default function ClientPortal() {
   );
 
   return (
-    <div className="min-h-screen" style={{background:'var(--tn-cream)', overflowY:'auto', height:'100vh'}}>
+    <div style={{background:'var(--tn-cream)', minHeight:'100vh'}}>
       {/* Header */}
       <div className="sticky top-0 z-10 px-4 py-3" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -276,6 +276,16 @@ export default function ClientPortal() {
                         <div className="flex items-center gap-1 mt-1 pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
                           <span className="text-xs" style={{color:'#0F6E56'}}>✓ {order.delivered_at}</span>
                           {order.driver_name && <span className="text-xs" style={{color:'var(--tn-gold)'}}>· {order.driver_name}</span>}
+                        </div>
+                      )}
+                      {(order.status==='enroute'||order.status==='picked') && (
+                        <div className="flex items-center gap-2 mt-1 pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse flex-shrink-0"/>
+                          <a href={`/track/${order.id}`} target="_blank" rel="noreferrer"
+                            className="text-xs font-medium" style={{color:'#185FA5'}}
+                            onClick={e=>e.stopPropagation()}>
+                            🗺️ Track live →
+                          </a>
                         </div>
                       )}
                     </div>
