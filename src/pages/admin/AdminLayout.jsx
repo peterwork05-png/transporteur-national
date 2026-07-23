@@ -6,6 +6,7 @@ const NAV = [
   { to: '/admin',          label: 'Today',           icon: '📊', end: true },
   { to: '/admin/orders',   label: 'Local orders',    icon: '📦' },
   { to: '/admin/routes',   label: 'Contract routes', icon: '🗺️' },
+  { to: '/admin/livemap',  label: 'Live map',        icon: '📍' },
   { to: '/admin/invoices', label: 'Invoices',        icon: '🧾' },
   { to: '/admin/payments', label: 'Payments',        icon: '💳' },
   { to: '/admin/drivers',  label: 'Drivers',         icon: '👥' },
