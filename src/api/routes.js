@@ -554,8 +554,8 @@ router.post('/invoices/reminder-preview', async (req, res) => {
 
     const toEmails = contacts.map(c => c.email).join(', ');
     const total    = `$${parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 })}`;
-    const dateFrom = inv.date_from ? inv.date_from.toString().split('T')[0] : '';
-    const dateTo   = inv.date_to   ? inv.date_to.toString().split('T')[0]   : '';
+    const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
+    const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
 
     res.json({
       success: true,
@@ -601,8 +601,8 @@ router.post('/invoices/send-reminder', async (req, res) => {
 
     const emailSubject = subject || `Rappel de paiement / Payment Reminder — Invoice #${invoiceId}`;
     const total    = `$${parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 })}`;
-    const dateFrom = inv.date_from ? inv.date_from.toString().split('T')[0] : '';
-    const dateTo   = inv.date_to   ? inv.date_to.toString().split('T')[0]   : '';
+    const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
+    const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
 
     const nodemailer = await import('nodemailer');
     const transporter = nodemailer.default.createTransport({
