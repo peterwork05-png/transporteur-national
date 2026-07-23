@@ -81,6 +81,10 @@ export function AppProvider({ children }) {
     fetchDrivers();
     fetchClients();
     fetchInvoices();
+
+    // Auto-refresh orders every 10 seconds to catch new WooCommerce orders
+    const iv = setInterval(() => fetchOrders(), 10000);
+    return () => clearInterval(iv);
   }, []);
 
   const updateOrderStatus = useCallback(async (id, status, extra = {}) => {
