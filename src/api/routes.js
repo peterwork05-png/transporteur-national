@@ -400,11 +400,18 @@ router.post('/invoices', async (req, res) => {
 
 router.patch('/invoices/:id/pay', async (req, res) => {
   try {
-    const { eft_number } = req.body;
-    const { rows } = await pool.query(`
-      UPDATE invoices SET status = 'paid', eft_number = $1, paid_at = NOW()
-      WHERE id = $2 RETURNING *
-    `, [eft_number, req.params.id]);
+    const { eft_number, status } = req.body;
+    if (status === 'pending') {
+      const { rows } = await pool.query(
+        `UPDATE invoices SET status = 'pending', eft_number = NULL, paid_at = NULL WHERE id = $1 RETURNING *`,
+        [req.params.id]
+      );
+      return res.json(rows[0]);
+    }
+    const { rows } = await pool.query(
+      `UPDATE invoices SET status = 'paid', eft_number = $1, paid_at = NOW() WHERE id = $2 RETURNING *`,
+      [eft_number, req.params.id]
+    );
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
