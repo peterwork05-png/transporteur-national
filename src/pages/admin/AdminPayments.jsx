@@ -303,12 +303,45 @@ export default function AdminPayments() {
                   </div>
                   <p className="text-xs" style={{color:'var(--tn-gold)'}}>{getClientName(inv)} · {inv.dates} · {fmt(inv.amount)}</p>
                 </div>
-                <button className="btn btn-outline btn-sm flex-shrink-0">Send reminder</button>
+                <ReminderButton inv={inv} getClientName={getClientName} fmt={fmt} />
               </div>
             ))
           }
         </div>
       )}
     </div>
+  );
+}
+
+function ReminderButton({ inv, getClientName, fmt }) {
+  const [sending,  setSending]  = useState(false);
+  const [sent,     setSent]     = useState(false);
+  const [error,    setError]    = useState(null);
+
+  const sendReminder = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      const res  = await fetch('/api/invoices/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: inv.id }),
+      });
+      const data = await res.json();
+      if (data.success) { setSent(true); }
+      else { setError(data.error || 'Failed to send'); }
+    } catch(e) { setError(e.message); }
+    setSending(false);
+  };
+
+  if (sent) return <span className="text-xs font-medium flex-shrink-0" style={{color:'#0F6E56'}}>✅ Sent!</span>;
+  if (error) return <span className="text-xs flex-shrink-0" style={{color:'#991B1B'}}>❌ {error}</span>;
+
+  return (
+    <button onClick={sendReminder} disabled={sending}
+      className="btn btn-outline btn-sm flex-shrink-0"
+      style={{opacity:sending?0.6:1}}>
+      {sending ? '...' : '📧 Remind'}
+    </button>
   );
 }
