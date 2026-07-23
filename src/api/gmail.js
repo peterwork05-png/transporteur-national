@@ -4,53 +4,67 @@ import pool from '../db/index.js';
 
 // Parse EFT details from email body
 function parseRemittance(text) {
-  const results = [];
-  
-  // Common patterns in Bureau en Gros / Staples remittance emails
-  const eftPatterns = [
-    /eft\s*#?\s*(\d+)/gi,
-    /reference\s*#?\s*(\d+)/gi,
-    /payment\s*#?\s*(\d+)/gi,
-    /remittance\s*#?\s*(\d+)/gi,
-    /transaction\s*#?\s*(\d+)/gi,
-  ];
-  
-  const amountPatterns = [
-    /total[:\s]+\$?([\d,]+\.?\d*)/gi,
-    /amount[:\s]+\$?([\d,]+\.?\d*)/gi,
-    /payment[:\s]+\$?([\d,]+\.?\d*)/gi,
-    /\$\s*([\d,]+\.?\d*)/g,
-  ];
+  // Clean up whitespace
+  const cleanText = text.replace(/\s+/g, ' ').trim();
 
-  const invoicePatterns = [
-    /invoice\s*#?\s*(\d+)/gi,
-    /inv\s*#?\s*(\d+)/gi,
-    /facture\s*#?\s*(\d+)/gi,
-  ];
-
-  // Extract EFT number
+  // Extract EFT number — Staples format: "EFT No.: 5045761"
   let eftNumber = null;
+  const eftPatterns = [
+    /EFT\s*No\.?\s*:?\s*(\d+)/i,
+    /EFT\s*#?\s*(\d+)/i,
+    /reference\s*#?\s*(\d+)/i,
+    /payment\s*(?:no|number|#)\.?\s*:?\s*(\d+)/i,
+    /transaction\s*#?\s*(\d+)/i,
+  ];
   for (const pattern of eftPatterns) {
-    const match = pattern.exec(text);
+    const match = cleanText.match(pattern);
     if (match) { eftNumber = match[1]; break; }
   }
 
-  // Extract amount
+  // Extract total amount — Staples format: "Total : 7,674.53"
   let amount = null;
+  const amountPatterns = [
+    /Total\s*:\s*([\d,]+\.?\d*)/i,
+    /Pay\s*Amount\s*([\d,]+\.?\d*)/i,
+    /total\s+amount\s*:?\s*\$?([\d,]+\.?\d*)/i,
+  ];
   for (const pattern of amountPatterns) {
-    const match = pattern.exec(text);
-    if (match) {
-      amount = parseFloat(match[1].replace(/,/g, ''));
-      if (amount > 100) break; // Skip small numbers
+    const matches = [...cleanText.matchAll(new RegExp(pattern.source, 'gi'))];
+    if (matches.length > 0) {
+      // Take the last match (the grand total, not individual line items)
+      const lastMatch = matches[matches.length - 1];
+      const val = parseFloat(lastMatch[1].replace(/,/g, ''));
+      if (val > 100) { amount = val; break; }
     }
   }
 
-  // Extract invoice numbers
+  // Extract invoice numbers — Staples lists them as plain numbers in table
   const invoiceNumbers = [];
-  for (const pattern of invoicePatterns) {
+  
+  // First try explicit invoice patterns
+  const explicitPatterns = [
+    /invoice\s*(?:no\.?|#)?\s*:?\s*(\d{3,6})/gi,
+    /inv\.?\s*#?\s*(\d{3,6})/gi,
+  ];
+  for (const pattern of explicitPatterns) {
     let match;
-    while ((match = pattern.exec(text)) !== null) {
-      invoiceNumbers.push(match[1]);
+    while ((match = pattern.exec(cleanText)) !== null) {
+      const num = match[1];
+      if (!invoiceNumbers.includes(num)) invoiceNumbers.push(num);
+    }
+  }
+
+  // If no explicit invoice patterns, look for Staples table format
+  // Lines with: number, date (MM/DD/YY), amount pattern
+  if (invoiceNumbers.length === 0) {
+    const tablePattern = /\b(\d{3,6})\s+\d{2}\/\d{2}\/\d{2}/g;
+    let match;
+    while ((match = tablePattern.exec(cleanText)) !== null) {
+      const num = match[1];
+      // Filter out vendor numbers (5177319 is too long) and keep invoice-sized numbers
+      if (parseInt(num) < 100000 && !invoiceNumbers.includes(num)) {
+        invoiceNumbers.push(num);
+      }
     }
   }
 
