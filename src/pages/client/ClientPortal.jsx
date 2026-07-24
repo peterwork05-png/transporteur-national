@@ -123,43 +123,55 @@ export default function ClientPortal() {
   const overdueAmt = invoices.filter(i => isOverdue(i)).reduce((s,i) => s + parseFloat(i.total||i.amount||0), 0);
 
   if (!client) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{background:'var(--tn-dark)'}}>
+    <div className="min-h-screen flex flex-col" style={{background:'var(--tn-dark)'}}>
       <div style={{position:'fixed',top:'-80px',right:'-80px',width:'300px',height:'300px',background:'var(--tn-red)',borderRadius:'50%',opacity:0.06,pointerEvents:'none'}}/>
       <div style={{position:'fixed',bottom:'-60px',left:'-60px',width:'200px',height:'200px',background:'var(--tn-gold)',borderRadius:'50%',opacity:0.08,pointerEvents:'none'}}/>
-      <div className="w-full max-w-sm relative z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
-            style={{background:'rgba(139,105,20,0.15)',border:'1px solid rgba(139,105,20,0.25)'}}>
-            <span className="text-4xl">🦅</span>
+      
+      {/* Back button */}
+      <div className="p-4 relative z-10">
+        <button onClick={() => window.history.back()}
+          className="flex items-center gap-2 text-sm"
+          style={{color:'rgba(250,247,240,0.4)'}}>
+          ← Back
+        </button>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-4 relative z-10">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+              style={{background:'rgba(139,105,20,0.15)',border:'1px solid rgba(139,105,20,0.25)'}}>
+              <span className="text-4xl">🦅</span>
+            </div>
+            <h1 className="text-2xl font-semibold" style={{color:'var(--tn-cream)'}}>Client Portal</h1>
+            <p className="text-sm mt-1" style={{color:'rgba(250,247,240,0.35)'}}>Transporteur National MC INC.</p>
           </div>
-          <h1 className="text-2xl font-semibold" style={{color:'var(--tn-cream)'}}>Client Portal</h1>
-          <p className="text-sm mt-1" style={{color:'rgba(250,247,240,0.35)'}}>Transporteur National MC INC.</p>
+          <div className="rounded-2xl p-5" style={{background:'rgba(250,247,240,0.04)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
+            <p className="text-xs uppercase tracking-wider mb-4" style={{color:'rgba(250,247,240,0.3)'}}>Sign in to your account</p>
+            <form onSubmit={handleLogin} className="space-y-3">
+              <div>
+                <label className="label" style={{color:'rgba(250,247,240,0.4)'}}>Email</label>
+                <input type="email" className="input"
+                  style={{background:'rgba(250,247,240,0.06)',borderColor:'rgba(139,105,20,0.2)',color:'var(--tn-cream)'}}
+                  placeholder="you@company.com" value={email} onChange={e=>setEmail(e.target.value)} required/>
+              </div>
+              <div>
+                <label className="label" style={{color:'rgba(250,247,240,0.4)'}}>Password</label>
+                <input type="password" className="input"
+                  style={{background:'rgba(250,247,240,0.06)',borderColor:'rgba(139,105,20,0.2)',color:'var(--tn-cream)'}}
+                  placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} required/>
+              </div>
+              {error && <p className="text-xs px-3 py-2 rounded-lg" style={{background:'rgba(192,57,43,0.15)',color:'#F87171'}}>{error}</p>}
+              <button type="submit" disabled={loading} className="btn w-full justify-center py-3 mt-2"
+                style={{background:'var(--tn-red)',color:'white',opacity:loading?0.7:1}}>
+                {loading ? 'Signing in...' : 'Sign in →'}
+              </button>
+            </form>
+          </div>
+          <p className="text-center text-xs mt-4" style={{color:'rgba(250,247,240,0.15)'}}>
+            Need access? Contact transporteurnationalmc@gmail.com
+          </p>
         </div>
-        <div className="rounded-2xl p-5" style={{background:'rgba(250,247,240,0.04)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
-          <p className="text-xs uppercase tracking-wider mb-4" style={{color:'rgba(250,247,240,0.3)'}}>Sign in to your account</p>
-          <form onSubmit={handleLogin} className="space-y-3">
-            <div>
-              <label className="label" style={{color:'rgba(250,247,240,0.4)'}}>Email</label>
-              <input type="email" className="input"
-                style={{background:'rgba(250,247,240,0.06)',borderColor:'rgba(139,105,20,0.2)',color:'var(--tn-cream)'}}
-                placeholder="you@company.com" value={email} onChange={e=>setEmail(e.target.value)} required/>
-            </div>
-            <div>
-              <label className="label" style={{color:'rgba(250,247,240,0.4)'}}>Password</label>
-              <input type="password" className="input"
-                style={{background:'rgba(250,247,240,0.06)',borderColor:'rgba(139,105,20,0.2)',color:'var(--tn-cream)'}}
-                placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} required/>
-            </div>
-            {error && <p className="text-xs px-3 py-2 rounded-lg" style={{background:'rgba(192,57,43,0.15)',color:'#F87171'}}>{error}</p>}
-            <button type="submit" disabled={loading} className="btn w-full justify-center py-3 mt-2"
-              style={{background:'var(--tn-red)',color:'white',opacity:loading?0.7:1}}>
-              {loading ? 'Signing in...' : 'Sign in →'}
-            </button>
-          </form>
-        </div>
-        <p className="text-center text-xs mt-4" style={{color:'rgba(250,247,240,0.15)'}}>
-          Need access? Contact transporteurnationalmc@gmail.com
-        </p>
       </div>
     </div>
   );
@@ -167,7 +179,7 @@ export default function ClientPortal() {
   return (
     <div style={{background:'var(--tn-cream)', minHeight:'100vh'}}>
       {/* Header */}
-      <div className="sticky top-0 z-10 px-4 py-3" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
+      <div className="sticky top-0 z-10 px-4" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)',paddingTop:'max(12px, env(safe-area-inset-top))',paddingBottom:'12px'}}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xl" style={{background:'rgba(139,105,20,0.15)'}}>🦅</div>
@@ -178,8 +190,17 @@ export default function ClientPortal() {
               <p className="text-sm font-semibold" style={{color:'var(--tn-cream)'}}>{client.name}</p>
             </div>
           </div>
-          <button onClick={() => setClient(null)} className="btn btn-sm"
-            style={{background:'rgba(250,247,240,0.08)',color:'rgba(250,247,240,0.5)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
+          <button onClick={() => setClient(null)}
+            style={{
+              minWidth:'80px', minHeight:'44px',
+              background:'rgba(250,247,240,0.08)',
+              color:'rgba(250,247,240,0.6)',
+              border:'0.5px solid rgba(139,105,20,0.2)',
+              borderRadius:'10px',
+              fontSize:'13px',
+              fontWeight:'500',
+              padding:'0 12px',
+            }}>
             Sign out
           </button>
         </div>
