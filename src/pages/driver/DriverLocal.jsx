@@ -214,6 +214,19 @@ export default function DriverLocal() {
               </div>
             )}
             <p className="text-sm font-semibold tabular-nums" style={{color:'var(--tn-gold)'}}>{format(new Date(),'hh:mm a')}</p>
+            <button onClick={() => window.location.href = '/'}
+              style={{
+                minWidth:'44px', minHeight:'44px',
+                background:'rgba(250,247,240,0.08)',
+                color:'rgba(250,247,240,0.5)',
+                border:'0.5px solid rgba(139,105,20,0.2)',
+                borderRadius:'10px',
+                fontSize:'18px',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}
+              title="Sign out">
+              🚪
+            </button>
           </div>
         </div>
       </div>
