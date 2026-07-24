@@ -18,26 +18,28 @@ router.delete('/orders/clean', async (req, res) => {
 // Search orders
 router.get('/orders/search', async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, client_group } = req.query;
     if (!q) return res.json([]);
     const search = `%${q}%`;
-    const { rows } = await pool.query(`
+
+    let query = `
       SELECT o.*, c.name as client_name, d.name as driver_name
       FROM orders o
       LEFT JOIN clients c ON o.client_id = c.id
       LEFT JOIN drivers d ON o.driver_id = d.id
-      WHERE 
-        o.id ILIKE $1 OR
-        o.address ILIKE $1 OR
-        o.store_number ILIKE $1 OR
-        o.po_number ILIKE $1 OR
-        o.to_associate_name ILIKE $1 OR
-        o.to_business_name ILIKE $1 OR
-        o.billing_name ILIKE $1 OR
-        c.name ILIKE $1
-      ORDER BY o.date DESC, o.created_at DESC
-      LIMIT 20
-    `, [search]);
+      WHERE o.id ILIKE $1
+    `;
+    const params = [search];
+
+    // If client_group provided, restrict to their orders only
+    if (client_group) {
+      params.push(client_group);
+      query += ` AND c.client_group = $${params.length}`;
+    }
+
+    query += ' ORDER BY o.date DESC, o.created_at DESC LIMIT 20';
+
+    const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
