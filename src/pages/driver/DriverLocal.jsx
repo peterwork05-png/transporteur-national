@@ -195,7 +195,7 @@ export default function DriverLocal() {
   return (
     <div className="min-h-screen" style={{background:'var(--tn-cream)'}}>
       {/* Header */}
-      <div className="sticky top-0 z-10 px-4 py-3" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)'}}>
+      <div className="sticky top-0 z-10 px-4" style={{background:'var(--tn-dark)',borderBottom:'0.5px solid rgba(139,105,20,0.2)', paddingTop:'max(12px, env(safe-area-inset-top))', paddingBottom:'12px'}}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{background:driverColor}}>
