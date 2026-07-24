@@ -128,10 +128,18 @@ export default function ClientPortal() {
       <div style={{position:'fixed',bottom:'-60px',left:'-60px',width:'200px',height:'200px',background:'var(--tn-gold)',borderRadius:'50%',opacity:0.08,pointerEvents:'none'}}/>
       
       {/* Back button */}
-      <div className="p-4 relative z-10">
+      <div style={{paddingTop:'max(20px, env(safe-area-inset-top))', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'8px', position:'relative', zIndex:10}}>
         <button onClick={() => window.history.back()}
-          className="flex items-center gap-2 text-sm"
-          style={{color:'rgba(250,247,240,0.4)'}}>
+          style={{
+            minHeight:'44px', minWidth:'80px',
+            display:'flex', alignItems:'center', gap:'6px',
+            color:'rgba(250,247,240,0.5)',
+            fontSize:'14px',
+            background:'rgba(250,247,240,0.06)',
+            border:'0.5px solid rgba(139,105,20,0.2)',
+            borderRadius:'10px',
+            padding:'0 14px',
+          }}>
           ← Back
         </button>
       </div>
