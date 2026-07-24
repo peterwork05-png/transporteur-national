@@ -604,9 +604,6 @@ router.post('/invoices/send-reminder', async (req, res) => {
     const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
     const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
 
-    const { Resend } = await import('resend');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
     const noteHtml = note ? `
       <div style="background:#FEF3C7;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #D97706">
         <p style="margin:0;color:#92400E;font-size:13px">${note}</p>
@@ -653,14 +650,22 @@ router.post('/invoices/send-reminder', async (req, res) => {
       </div>
     `;
 
-    const { error: sendError } = await resend.emails.send({
-      from: 'Transporteur National MC <onboarding@resend.dev>',
-      to: toEmails.split(',').map(e => e.trim()),
-      subject: emailSubject,
-      html,
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Transporteur National MC <onboarding@resend.dev>',
+        to: toEmails.split(',').map(e => e.trim()),
+        subject: emailSubject,
+        html,
+      }),
     });
 
-    if (sendError) throw new Error(sendError.message);
+    const resendData = await resendRes.json();
+    if (!resendRes.ok) throw new Error(resendData?.message || JSON.stringify(resendData));
 
     console.log(`📧 Reminder sent for invoice #${invoiceId} to ${toEmails}`);
     res.json({ success: true, sentTo: toEmails });
