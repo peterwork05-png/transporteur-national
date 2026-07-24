@@ -407,16 +407,34 @@ export default function AdminOrders() {
               </div>
 
               {selected.status==='delivered' && (
-                <div className="grid grid-cols-2 gap-3">
-                  {[{icon:'📷',label:'Delivery photo',val:selected.photo_url},{icon:'✍️',label:'Signature',val:selected.recipient_name}].map((item,i)=>(
-                    <div key={i} className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
-                      <span className="text-lg">{item.icon}</span>
-                      <div>
-                        <p className="text-xs font-medium" style={{color:'#0F6E56'}}>{item.label}</p>
-                        <p className="text-xs" style={{color:'#0F6E56'}}>{item.val||'Captured'}</p>
-                      </div>
+                <div className="space-y-2">
+                  {selected.photo_url && (
+                    <div>
+                      <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>📷 Delivery photo</p>
+                      <img src={selected.photo_url} alt="Delivery proof"
+                        className="w-full rounded-xl object-cover" style={{maxHeight:'200px'}}/>
                     </div>
-                  ))}
+                  )}
+                  {selected.signature_url && (
+                    <div>
+                      <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>✍️ Signature — {selected.recipient_name}</p>
+                      <img src={selected.signature_url} alt="Signature"
+                        className="w-full rounded-xl" style={{maxHeight:'100px', background:'white', padding:'8px'}}/>
+                    </div>
+                  )}
+                  {!selected.photo_url && !selected.signature_url && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[{icon:'📷',label:'Delivery photo',val:selected.photo_url},{icon:'✍️',label:'Signature',val:selected.recipient_name}].map((item,i)=>(
+                        <div key={i} className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
+                          <span className="text-lg">{item.icon}</span>
+                          <div>
+                            <p className="text-xs font-medium" style={{color:'#0F6E56'}}>{item.label}</p>
+                            <p className="text-xs" style={{color:'#0F6E56'}}>{item.val||'Captured'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
