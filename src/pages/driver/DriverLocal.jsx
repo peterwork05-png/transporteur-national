@@ -28,6 +28,7 @@ export default function DriverLocal() {
   const [photoTaken,    setPhotoTaken]    = useState(false);
   const [photoDataUrl,  setPhotoDataUrl]  = useState(null);
   const [photoFile,     setPhotoFile]     = useState(null);
+  const [sigDataUrl, setSigDataUrl] = useState(null);
   const sigCanvasRef = useRef(null);
   const locationInterval = useRef(null);
 
@@ -131,6 +132,7 @@ export default function DriverLocal() {
     setPhotoDataUrl(null);
     setPhotoFile(null);
     setSigDrawn(false);
+    setSigDataUrl(null);
     setRecipientName('');
   };
 
@@ -156,19 +158,10 @@ export default function DriverLocal() {
       } catch(e) { console.error('Photo upload failed:', e); }
     }
 
-    // Upload signature from canvas
-    if (sigCanvasRef.current && sigDrawn) {
+    // Upload signature from saved data URL
+    if (sigDataUrl) {
       try {
-        // Create a white background version of the signature
-        const canvas = sigCanvasRef.current;
-        const exportCanvas = document.createElement('canvas');
-        exportCanvas.width = canvas.width;
-        exportCanvas.height = canvas.height;
-        const ctx = exportCanvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-        ctx.drawImage(canvas, 0, 0);
-        const sigBase64 = exportCanvas.toDataURL('image/png').split(',')[1];
+        const sigBase64 = sigDataUrl.split(',')[1];
         const res = await fetch('/api/upload/delivery-photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -529,7 +522,21 @@ export default function DriverLocal() {
                 )}
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>setProofStep(1)} className="btn btn-outline">← Back</button>
-                  <button disabled={!sigDrawn||!recipientName} onClick={()=>setProofStep(3)} className="btn flex-1 justify-center"
+                  <button disabled={!sigDrawn||!recipientName} onClick={()=>{
+                    // Save signature to state before canvas unmounts
+                    if (sigCanvasRef.current) {
+                      const canvas = sigCanvasRef.current;
+                      const exportCanvas = document.createElement('canvas');
+                      exportCanvas.width = canvas.width;
+                      exportCanvas.height = canvas.height;
+                      const ctx = exportCanvas.getContext('2d');
+                      ctx.fillStyle = 'white';
+                      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                      ctx.drawImage(canvas, 0, 0);
+                      setSigDataUrl(exportCanvas.toDataURL('image/png'));
+                    }
+                    setProofStep(3);
+                  }} className="btn flex-1 justify-center"
                     style={{background:sigDrawn&&recipientName?'var(--tn-red)':'var(--tn-warm)',color:sigDrawn&&recipientName?'white':'var(--tn-gold)'}}>
                     Next →
                   </button>
