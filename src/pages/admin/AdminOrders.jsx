@@ -419,7 +419,7 @@ export default function AdminOrders() {
                     <div>
                       <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>✍️ Signature — {selected.recipient_name}</p>
                       <img src={selected.signature_url} alt="Signature"
-                        className="w-full rounded-xl" style={{maxHeight:'100px', background:'white', padding:'8px'}}/>
+                        className="w-full rounded-xl" style={{maxHeight:'120px', background:'white', padding:'8px', border:'0.5px solid var(--tn-border)'}}/>
                     </div>
                   )}
                   {!selected.photo_url && !selected.signature_url && (
