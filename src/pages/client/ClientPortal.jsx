@@ -411,16 +411,34 @@ export default function ClientPortal() {
                 </div>
               )}
               {selectedOrder.status==='delivered' && (
-                <div className="grid grid-cols-2 gap-3">
-                  {[{icon:'📷',label:'Delivery photo'},{icon:'✍️',label:'Signature',sub:selectedOrder.recipient_name}].map((item,i)=>(
-                    <div key={i} className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
-                      <span>{item.icon}</span>
-                      <div>
-                        <p className="text-xs font-medium" style={{color:'#0F6E56'}}>{item.label}</p>
-                        <p className="text-xs" style={{color:'#0F6E56'}}>{item.sub||'Captured'}</p>
-                      </div>
+                <div className="space-y-2">
+                  {selectedOrder.photo_url && (
+                    <div>
+                      <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>📷 Delivery photo</p>
+                      <img src={selectedOrder.photo_url} alt="Delivery proof"
+                        className="w-full rounded-xl object-cover" style={{maxHeight:'200px'}}/>
                     </div>
-                  ))}
+                  )}
+                  {selectedOrder.signature_url && (
+                    <div>
+                      <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>✍️ Signature — {selectedOrder.recipient_name}</p>
+                      <img src={selectedOrder.signature_url} alt="Signature"
+                        className="w-full rounded-xl" style={{maxHeight:'100px', background:'white', padding:'8px'}}/>
+                    </div>
+                  )}
+                  {!selectedOrder.photo_url && !selectedOrder.signature_url && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[{icon:'📷',label:'Delivery photo'},{icon:'✍️',label:'Signature',sub:selectedOrder.recipient_name}].map((item,i)=>(
+                        <div key={i} className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
+                          <span>{item.icon}</span>
+                          <div>
+                            <p className="text-xs font-medium" style={{color:'#0F6E56'}}>{item.label}</p>
+                            <p className="text-xs" style={{color:'#0F6E56'}}>{item.sub||'Captured'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <button onClick={()=>setSelectedOrder(null)} className="btn w-full justify-center"
