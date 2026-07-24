@@ -157,9 +157,18 @@ export default function DriverLocal() {
     }
 
     // Upload signature from canvas
-    if (sigCanvasRef.current) {
+    if (sigCanvasRef.current && sigDrawn) {
       try {
-        const sigBase64 = sigCanvasRef.current.toDataURL('image/png').split(',')[1];
+        // Create a white background version of the signature
+        const canvas = sigCanvasRef.current;
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = canvas.width;
+        exportCanvas.height = canvas.height;
+        const ctx = exportCanvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+        ctx.drawImage(canvas, 0, 0);
+        const sigBase64 = exportCanvas.toDataURL('image/png').split(',')[1];
         const res = await fetch('/api/upload/delivery-photo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
