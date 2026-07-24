@@ -675,6 +675,48 @@ router.post('/invoices/send-reminder', async (req, res) => {
   }
 });
 
+// Upload delivery photo or signature
+router.post('/upload/delivery-photo', async (req, res) => {
+  try {
+    const { imageBase64, orderId } = req.body;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey    = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    const timestamp = Math.round(Date.now() / 1000);
+    const publicId  = `deliveries/${orderId}_${timestamp}`;
+    const { createHash } = await import('crypto');
+    const signature = createHash('sha1').update(`public_id=${publicId}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+    const fields = {
+      file: `data:image/jpeg;base64,${imageBase64}`,
+      public_id: publicId,
+      timestamp: String(timestamp),
+      api_key: apiKey,
+      signature,
+    };
+
+    let body = '';
+    for (const [key, value] of Object.entries(fields)) {
+      body += `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`;
+    }
+    body += `--${boundary}--\r\n`;
+
+    const uploadRes = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      { method: 'POST', headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` }, body }
+    );
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok || uploadData.error) throw new Error(uploadData.error?.message || 'Upload failed');
+
+    res.json({ success: true, url: uploadData.secure_url });
+  } catch(err) {
+    console.error('Photo upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
