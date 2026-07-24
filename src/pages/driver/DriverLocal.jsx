@@ -26,6 +26,9 @@ export default function DriverLocal() {
   const [recipientName, setRecipientName] = useState('');
   const [sigDrawn,      setSigDrawn]      = useState(false);
   const [photoTaken,    setPhotoTaken]    = useState(false);
+  const [photoDataUrl,  setPhotoDataUrl]  = useState(null);
+  const [photoFile,     setPhotoFile]     = useState(null);
+  const sigCanvasRef = useRef(null);
   const locationInterval = useRef(null);
 
   const fetchMyOrders = useCallback(async () => {
@@ -125,15 +128,57 @@ export default function DriverLocal() {
     setShowProof(id);
     setProofStep(1);
     setPhotoTaken(false);
+    setPhotoDataUrl(null);
+    setPhotoFile(null);
     setSigDrawn(false);
     setRecipientName('');
   };
 
-  const submitDelivery = () => {
-    updateStatus(showProof, 'delivered', { delivered_at: now(), recipient_name: recipientName });
+  const submitDelivery = async () => {
+    let photo_url = null;
+    let signature_url = null;
+
+    // Upload photo to Cloudinary
+    if (photoFile) {
+      try {
+        const reader = new FileReader();
+        const photoBase64 = await new Promise(resolve => {
+          reader.onload = e => resolve(e.target.result.split(',')[1]);
+          reader.readAsDataURL(photoFile);
+        });
+        const res = await fetch('/api/upload/delivery-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: photoBase64, orderId: showProof }),
+        });
+        const data = await res.json();
+        if (data.url) photo_url = data.url;
+      } catch(e) { console.error('Photo upload failed:', e); }
+    }
+
+    // Upload signature from canvas
+    if (sigCanvasRef.current) {
+      try {
+        const sigBase64 = sigCanvasRef.current.toDataURL('image/png').split(',')[1];
+        const res = await fetch('/api/upload/delivery-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: sigBase64, orderId: `${showProof}_sig` }),
+        });
+        const data = await res.json();
+        if (data.url) signature_url = data.url;
+      } catch(e) { console.error('Signature upload failed:', e); }
+    }
+
+    updateStatus(showProof, 'delivered', {
+      delivered_at: now(),
+      recipient_name: recipientName,
+      photo_url,
+      signature_url,
+    });
     setActiveEnroute(null);
     setShowProof(null);
-    stopLocationSharing(); // 🗺️ Stop GPS sharing after delivery
+    stopLocationSharing();
   };
 
   if (loading) return (
@@ -356,12 +401,14 @@ export default function DriverLocal() {
       {/* Proof modal */}
       {showProof&&(
         <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}}>
-          <div className="w-full rounded-t-2xl p-5 max-w-lg mx-auto" style={{background:'var(--tn-cream)'}}>
+          <div className="w-full rounded-t-2xl p-5 max-w-lg mx-auto max-h-[92vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
             <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{background:'var(--tn-border-strong)'}}/>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">Confirm delivery</h2>
               <button onClick={()=>setShowProof(null)} className="text-xl leading-none" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
+
+            {/* Steps */}
             <div className="flex items-center gap-0 mb-5">
               {['Photo','Signature','Confirm'].map((step,i)=>(
                 <div key={step} className="flex items-center flex-1 last:flex-none">
@@ -373,16 +420,46 @@ export default function DriverLocal() {
                 </div>
               ))}
             </div>
+
+            {/* Step 1 — Camera */}
             {proofStep===1&&(
               <div>
-                <p className="font-medium text-sm mb-1">Take delivery photo</p>
-                {!photoTaken?(
-                  <button onClick={()=>setPhotoTaken(true)} className="w-full rounded-xl p-8 flex flex-col items-center gap-2" style={{border:'2px dashed var(--tn-border-strong)',background:'var(--tn-warm)'}}>
-                    <span className="text-3xl">📷</span><span className="text-sm" style={{color:'var(--tn-gold)'}}>Tap to take photo</span>
-                  </button>
-                ):(
-                  <div className="w-full h-40 rounded-xl flex items-center justify-center" style={{background:'linear-gradient(135deg,#1a3a1a,#2d5a2d)'}}>
-                    <span className="text-white text-sm opacity-70">📦 Photo captured</span>
+                <p className="font-medium text-sm mb-3">Take a photo of the delivery</p>
+                {!photoTaken ? (
+                  <div>
+                    <label htmlFor="camera-input" className="w-full rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer"
+                      style={{border:'2px dashed var(--tn-border-strong)',background:'var(--tn-warm)'}}>
+                      <span className="text-4xl">📷</span>
+                      <span className="text-sm font-medium" style={{color:'var(--tn-gold)'}}>Tap to open camera</span>
+                      <span className="text-xs" style={{color:'rgba(139,105,20,0.5)'}}>Or select from gallery</span>
+                    </label>
+                    <input
+                      id="camera-input"
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        // Show preview
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setPhotoTaken(true);
+                          setPhotoDataUrl(ev.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                        setPhotoFile(file);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <img src={photoDataUrl} alt="Delivery" className="w-full rounded-xl object-cover" style={{maxHeight:'220px'}}/>
+                    <button onClick={() => { setPhotoTaken(false); setPhotoDataUrl(null); setPhotoFile(null); }}
+                      className="btn btn-outline btn-sm w-full justify-center text-xs">
+                      📷 Retake photo
+                    </button>
                   </div>
                 )}
                 <button disabled={!photoTaken} onClick={()=>setProofStep(2)} className="btn w-full justify-center mt-4"
@@ -391,14 +468,56 @@ export default function DriverLocal() {
                 </button>
               </div>
             )}
+
+            {/* Step 2 — Signature */}
             {proofStep===2&&(
               <div>
-                <p className="font-medium text-sm mb-1">Recipient signature</p>
-                <input className="input mb-3" placeholder="Received by (name)" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/>
-                <div className="rounded-xl h-32 flex items-center justify-center text-sm cursor-pointer" onClick={()=>setSigDrawn(true)}
-                  style={{border:'0.5px solid var(--tn-border-strong)',background:'white',color:sigDrawn?'var(--tn-dark)':'var(--tn-gold)'}}>
-                  {sigDrawn?'Signature captured ✓':'Sign here with finger'}
-                </div>
+                <p className="font-medium text-sm mb-3">Recipient signature</p>
+                <input className="input mb-3" placeholder="Received by (full name)" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/>
+                <p className="text-xs mb-2" style={{color:'var(--tn-gold)'}}>Sign below with finger:</p>
+                <canvas
+                  ref={sigCanvasRef}
+                  width={340}
+                  height={140}
+                  className="w-full rounded-xl"
+                  style={{border:'0.5px solid var(--tn-border-strong)',background:'white',touchAction:'none',cursor:'crosshair'}}
+                  onPointerDown={(e) => {
+                    const canvas = sigCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    ctx.beginPath();
+                    ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#1A1208';
+                    ctx.lineCap = 'round';
+                    canvas.isDrawing = true;
+                    setSigDrawn(true);
+                  }}
+                  onPointerMove={(e) => {
+                    const canvas = sigCanvasRef.current;
+                    if (!canvas.isDrawing) return;
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+                    ctx.stroke();
+                  }}
+                  onPointerUp={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing = false; }}
+                  onPointerLeave={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing = false; }}
+                />
+                {sigDrawn && (
+                  <button onClick={() => {
+                    const canvas = sigCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    setSigDrawn(false);
+                  }} className="btn btn-outline btn-sm mt-2 text-xs">
+                    ✕ Clear signature
+                  </button>
+                )}
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>setProofStep(1)} className="btn btn-outline">← Back</button>
                   <button disabled={!sigDrawn||!recipientName} onClick={()=>setProofStep(3)} className="btn flex-1 justify-center"
@@ -408,10 +527,18 @@ export default function DriverLocal() {
                 </div>
               </div>
             )}
+
+            {/* Step 3 — Confirm */}
             {proofStep===3&&(
               <div>
                 <p className="font-medium text-sm mb-3">Review & confirm</p>
-                {[{icon:'📷',label:'Delivery photo',sub:'1 photo captured'},{icon:'✍️',label:'Signature',sub:`Signed by: ${recipientName}`}].map((item,i)=>(
+                {photoDataUrl && (
+                  <img src={photoDataUrl} alt="Delivery" className="w-full rounded-xl object-cover mb-3" style={{maxHeight:'150px'}}/>
+                )}
+                {[
+                  {icon:'📷', label:'Delivery photo', sub:'Photo captured ✓'},
+                  {icon:'✍️', label:'Signature',       sub:`Signed by: ${recipientName}`},
+                ].map((item,i)=>(
                   <div key={i} className="flex items-center gap-3 p-3 rounded-xl mb-2" style={{background:'var(--tn-warm)'}}>
                     <span className="text-xl">{item.icon}</span>
                     <div><p className="text-sm font-medium">{item.label}</p><p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.sub}</p></div>
@@ -420,7 +547,9 @@ export default function DriverLocal() {
                 ))}
                 <div className="flex gap-2 mt-3">
                   <button onClick={()=>setProofStep(2)} className="btn btn-outline">← Back</button>
-                  <button onClick={submitDelivery} className="btn btn-success flex-1 justify-center">✓ Submit & mark delivered</button>
+                  <button onClick={submitDelivery} className="btn btn-success flex-1 justify-center">
+                    ✓ Submit & mark delivered
+                  </button>
                 </div>
               </div>
             )}
