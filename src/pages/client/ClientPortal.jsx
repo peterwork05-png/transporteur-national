@@ -423,7 +423,7 @@ export default function ClientPortal() {
                     <div>
                       <p className="text-xs mb-1 font-medium" style={{color:'var(--tn-gold)'}}>✍️ Signature — {selectedOrder.recipient_name}</p>
                       <img src={selectedOrder.signature_url} alt="Signature"
-                        className="w-full rounded-xl" style={{maxHeight:'100px', background:'white', padding:'8px'}}/>
+                        className="w-full rounded-xl" style={{maxHeight:'120px', background:'white', padding:'8px', border:'0.5px solid var(--tn-border)'}}/>
                     </div>
                   )}
                   {!selectedOrder.photo_url && !selectedOrder.signature_url && (
