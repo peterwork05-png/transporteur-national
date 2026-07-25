@@ -1,34 +1,38 @@
 import { useApp } from '../../context/AppContext';
-import { ONTARIO_STOPS, QUEBEC_STOPS, CONTRACT_RATES } from '../../data/store';
+import { ONTARIO_STOPS, QUEBEC_STOPS } from '../../data/store';
 import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
 export default function DriverRoute() {
   const { route } = useParams();
-  const { ontarioRoute, quebecRoute, setOntarioRoute, setQuebecRoute } = useApp();
+  const { ontarioRoute, quebecRoute, setOntarioRoute, setQuebecRoute, drivers } = useApp();
   const [clock, setClock] = useState(new Date());
-  const [tab, setTab] = useState('stops');
+  const [tab,   setTab]   = useState('stops');
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
 
-  const isOntario = route === 'ontario';
+  const isOntario  = route === 'ontario';
   const routeState = isOntario ? ontarioRoute : quebecRoute;
-  const setRoute = isOntario ? setOntarioRoute : setQuebecRoute;
-  const rawStops = isOntario ? ONTARIO_STOPS : QUEBEC_STOPS;
-  const stops = rawStops.map(s => typeof s === 'string' ? { name: s, addr: '' } : { name: s.name, addr: s.addr });
-  const driverName = isOntario ? 'Jean-Luc Bergeron' : 'Pierre Tremblay';
-  const driverInitials = isOntario ? 'JL' : 'PT';
-  const driverColor = isOntario ? '#8B4513' : '#0F6E56';
+  const setRoute   = isOntario ? setOntarioRoute : setQuebecRoute;
+  const rawStops   = isOntario ? ONTARIO_STOPS : QUEBEC_STOPS;
+  const stops      = rawStops.map(s => typeof s === 'string' ? { name: s, addr: '' } : { name: s.name, addr: s.addr });
   const routeTitle = isOntario ? 'Ontario / Gatineau' : 'Québec';
 
-  const nowStr = () => clock.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const currentIdx = routeState.stopStatus.findIndex(s => s === null);
-  const delivered = routeState.stopStatus.filter(s => s === 'delivered').length;
-  const skipped = routeState.stopStatus.filter(s => s === 'skipped').length;
-  const processed = delivered + skipped;
+  // Get real driver from database
+  const driver         = drivers?.find(d => d.role === (isOntario ? 'ontario' : 'quebec'));
+  const driverName     = driver?.name     || (isOntario ? 'Ontario Driver' : 'Québec Driver');
+  const driverInitials = driver?.initials || (isOntario ? 'OD' : 'QD');
+  const driverColor    = driver?.color    || (isOntario ? '#8B4513' : '#0F6E56');
 
-  const startRoute = () => { if (routeState.holiday) return; setRoute(r => ({ ...r, started: true, startTime: nowStr() })); };
+  const nowStr     = () => clock.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const currentIdx = routeState.stopStatus.findIndex(s => s === null);
+  const delivered  = routeState.stopStatus.filter(s => s === 'delivered').length;
+  const skipped    = routeState.stopStatus.filter(s => s === 'skipped').length;
+  const processed  = delivered + skipped;
+
+  const startRoute  = () => { if (routeState.holiday) return; setRoute(r => ({ ...r, started: true, startTime: nowStr() })); };
+  const markHoliday = () => { if (routeState.started) return; setRoute(r => ({ ...r, holiday: true })); };
   const markArrived = () => {
     if (currentIdx < 0 || currentIdx >= stops.length) return;
     const newStatus = [...routeState.stopStatus]; const newArrivals = [...routeState.arrivals];
@@ -40,23 +44,36 @@ export default function DriverRoute() {
     const newStatus = [...routeState.stopStatus]; newStatus[currentIdx] = 'skipped';
     setRoute(r => ({ ...r, stopStatus: newStatus, done: newStatus.every(s => s !== null) }));
   };
-  const markHoliday = () => { if (routeState.started) return; setRoute(r => ({ ...r, holiday: true })); };
 
   return (
     <div className="min-h-screen" style={{ background:'var(--tn-cream)' }}>
-      {/* Header */}
-      <div className="sticky top-0 z-10 px-4 py-3" style={{ background:'var(--tn-dark)', borderBottom:'0.5px solid rgba(139,105,20,0.2)' }}>
+
+      {/* Header — safe area + sign out */}
+      <div className="sticky top-0 z-10 px-4"
+        style={{ background:'var(--tn-dark)', borderBottom:'0.5px solid rgba(139,105,20,0.2)',
+          paddingTop:'max(12px, env(safe-area-inset-top))', paddingBottom:'12px' }}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: driverColor }}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+              style={{ background: driverColor }}>
               {driverInitials}
             </div>
-            <div>
-              <p className="text-xs" style={{ color:'rgba(250,247,240,0.4)' }}>{driverName} · {routeTitle} route</p>
-              <p className="text-sm font-medium" style={{ color:'var(--tn-cream)' }}>{format(clock, 'EEEE, MMMM d yyyy')}</p>
+            <div className="min-w-0">
+              <p className="text-xs truncate" style={{ color:'rgba(250,247,240,0.4)' }}>{driverName} · {routeTitle}</p>
+              <p className="text-sm font-medium" style={{ color:'var(--tn-cream)' }}>{format(clock, 'EEE, MMM d · hh:mm a')}</p>
             </div>
           </div>
-          <p className="text-base font-bold tabular-nums" style={{ color:'var(--tn-gold)' }}>{format(clock, 'hh:mm:ss a')}</p>
+          <button onClick={() => window.location.href = '/'}
+            style={{
+              minWidth:'44px', minHeight:'44px', flexShrink:0,
+              background:'rgba(250,247,240,0.08)',
+              color:'rgba(250,247,240,0.5)',
+              border:'0.5px solid rgba(139,105,20,0.2)',
+              borderRadius:'10px', fontSize:'18px', marginLeft:'8px',
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>
+            🚪
+          </button>
         </div>
       </div>
 
@@ -134,11 +151,12 @@ export default function DriverRoute() {
 
             <div className="card overflow-hidden">
               {stops.map((stop,i) => {
-                const status = routeState.stopStatus[i];
+                const status   = routeState.stopStatus[i];
                 const isActive = routeState.started && i===currentIdx && !routeState.done;
-                const arrival = routeState.arrivals[i];
+                const arrival  = routeState.arrivals[i];
                 return (
-                  <div key={i} className="flex items-start gap-3 p-3" style={{borderBottom:'0.5px solid var(--tn-border)',background:isActive?'rgba(24,95,165,0.04)':'transparent'}}>
+                  <div key={i} className="flex items-start gap-3 p-3"
+                    style={{borderBottom:'0.5px solid var(--tn-border)',background:isActive?'rgba(24,95,165,0.04)':'transparent'}}>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
                       style={{background:status==='delivered'?'#E8F5EF':status==='skipped'?'#FEE2E2':isActive?'rgba(24,95,165,0.12)':'var(--tn-warm)',
                               color:status==='delivered'?'#0F6E56':status==='skipped'?'#991B1B':isActive?'#185FA5':'var(--tn-gold)'}}>
@@ -146,8 +164,8 @@ export default function DriverRoute() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium" style={{textDecoration:status==='skipped'?'line-through':'none',color:status?'rgba(26,18,8,0.4)':'var(--tn-dark)'}}>{stop.name}</p>
-                      {stop.addr && <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stop.addr}</p>}
-                      {arrival && <p className="text-xs mt-0.5" style={{color:'#0F6E56'}}>🕐 Arrived {arrival}</p>}
+                      {stop.addr  && <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stop.addr}</p>}
+                      {arrival    && <p className="text-xs mt-0.5" style={{color:'#0F6E56'}}>🕐 Arrived {arrival}</p>}
                       {status==='skipped' && <p className="text-xs mt-0.5" style={{color:'#991B1B'}}>⏭ Skipped today</p>}
                     </div>
                     {status && (
@@ -172,14 +190,18 @@ export default function DriverRoute() {
           <div className="card p-4">
             <h2 className="section-title">Today's summary</h2>
             <div className="grid grid-cols-2 gap-3">
-              {[{label:'Total stops',val:stops.length},{label:'Delivered',val:delivered},{label:'Skipped',val:skipped},{label:'Route started',val:routeState.startTime||'—'}].map((s,i) => (
+              {[
+                {label:'Total stops',  val:stops.length},
+                {label:'Delivered',    val:delivered},
+                {label:'Skipped',      val:skipped},
+                {label:'Route started',val:routeState.startTime||'—'},
+              ].map((s,i) => (
                 <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
                   <p className="text-xs" style={{color:'var(--tn-gold)'}}>{s.label}</p>
                   <p className="font-semibold text-sm mt-0.5">{s.val}</p>
                 </div>
               ))}
             </div>
-            <p className="text-xs mt-3 text-center" style={{color:'var(--tn-gold)',borderTop:'0.5px solid var(--tn-border)',paddingTop:'12px'}}>Invoice auto-generates Sunday based on days completed</p>
           </div>
         )}
       </div>
