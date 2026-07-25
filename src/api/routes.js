@@ -107,6 +107,18 @@ router.post('/routes/:route/progress', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Reset route for today
+router.post('/routes/:route/reset', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    await pool.query(
+      `DELETE FROM route_days WHERE route = $1 AND date = $2`,
+      [req.params.route, today]
+    );
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // Get all orders
 router.get('/orders', async (req, res) => {
   try {
