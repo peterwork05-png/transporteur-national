@@ -1,9 +1,10 @@
 import { useApp } from '../../context/AppContext';
 import { ONTARIO_STOPS, QUEBEC_STOPS } from '../../data/store';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function AdminRoutes() {
-  const { ontarioRoute, quebecRoute, drivers, fetchOrders } = useApp();
+  const { ontarioRoute, quebecRoute, drivers, fetchOrders, setOntarioRoute, setQuebecRoute } = useApp();
+  const [resetting, setResetting] = useState(null);
 
   useEffect(() => {
     const iv = setInterval(() => fetchOrders(), 30000);
@@ -13,7 +14,23 @@ export default function AdminRoutes() {
   const ontarioDriver = drivers?.find(d => d.role === 'ontario');
   const quebecDriver  = drivers?.find(d => d.role === 'quebec');
 
-  const renderRoute = (title, driver, route, stops, accentColor) => {
+  const resetRoute = async (routeName) => {
+    if (!window.confirm(`Reset ${routeName === 'ontario' ? 'Ontario' : 'Québec'} route for today? This cannot be undone.`)) return;
+    setResetting(routeName);
+    try {
+      await fetch(`/api/routes/${routeName}/reset`, { method: 'POST' });
+      const emptyState = {
+        started: false, done: false, holiday: false, startTime: null,
+        stopStatus: new Array(routeName === 'ontario' ? 15 : 10).fill(null),
+        arrivals:   new Array(routeName === 'ontario' ? 15 : 10).fill(null),
+      };
+      if (routeName === 'ontario') setOntarioRoute(emptyState);
+      else setQuebecRoute(emptyState);
+    } catch(e) { console.error(e); }
+    setResetting(null);
+  };
+
+  const renderRoute = (title, routeName, driver, route, stops, accentColor) => {
     const delivered  = route.stopStatus.filter(s => s === 'delivered').length;
     const skipped    = route.stopStatus.filter(s => s === 'skipped').length;
     const pct        = Math.round(((delivered + skipped) / stops.length) * 100);
@@ -27,9 +44,20 @@ export default function AdminRoutes() {
       <div className="card p-4 overflow-hidden">
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold text-sm">{title}</h2>
-          <span className={`badge ${route.started ? 'badge-info' : route.holiday ? 'badge-warning' : 'badge-gray'}`}>
-            {route.holiday ? 'Holiday' : route.started ? (route.done ? 'Complete' : 'In progress') : 'Not started'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`badge ${route.started ? 'badge-info' : route.holiday ? 'badge-warning' : 'badge-gray'}`}>
+              {route.holiday ? 'Holiday' : route.started ? (route.done ? 'Complete' : 'In progress') : 'Not started'}
+            </span>
+            {(route.started || route.done || route.holiday) && (
+              <button
+                onClick={() => resetRoute(routeName)}
+                disabled={resetting === routeName}
+                className="text-xs px-2 py-1 rounded-lg"
+                style={{background:'#FEE2E2', color:'#991B1B', opacity: resetting===routeName ? 0.5 : 1}}>
+                {resetting === routeName ? '...' : '↺ Reset'}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between mb-3">
@@ -108,8 +136,8 @@ export default function AdminRoutes() {
         <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Live view — Ontario & Québec</p>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {renderRoute('Ontario / Gatineau', ontarioDriver, ontarioRoute, ONTARIO_STOPS, 'var(--tn-red)')}
-        {renderRoute('Québec route',       quebecDriver,  quebecRoute,  QUEBEC_STOPS,  'var(--tn-gold)')}
+        {renderRoute('Ontario / Gatineau', 'ontario', ontarioDriver, ontarioRoute, ONTARIO_STOPS, 'var(--tn-red)')}
+        {renderRoute('Québec route',       'quebec',  quebecDriver,  quebecRoute,  QUEBEC_STOPS,  'var(--tn-gold)')}
       </div>
     </div>
   );
