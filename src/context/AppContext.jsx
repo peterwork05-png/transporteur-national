@@ -11,8 +11,45 @@ export function AppProvider({ children }) {
   const [drivers, setDrivers] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [ontarioRoute, setOntarioRoute] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(15).fill(null), arrivals: [] });
-  const [quebecRoute, setQuebecRoute] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(10).fill(null), arrivals: [] });
+  const [ontarioRoute, setOntarioRouteState] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(15).fill(null), arrivals: new Array(15).fill(null) });
+  const [quebecRoute,  setQuebecRouteState]  = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(10).fill(null), arrivals: new Array(10).fill(null) });
+
+  // Save route to DB whenever it changes
+  const saveRoute = useCallback(async (routeName, routeData) => {
+    try {
+      await fetch(`${API}/routes/${routeName}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(routeData),
+      });
+    } catch(e) { console.error('Save route error:', e); }
+  }, []);
+
+  const setOntarioRoute = useCallback((updater) => {
+    setOntarioRouteState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveRoute('ontario', next);
+      return next;
+    });
+  }, [saveRoute]);
+
+  const setQuebecRoute = useCallback((updater) => {
+    setQuebecRouteState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveRoute('quebec', next);
+      return next;
+    });
+  }, [saveRoute]);
+
+  // Load today's route progress on startup
+  const fetchRoutes = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API}/routes/progress`);
+      const data = await res.json();
+      if (data.ontario) setOntarioRouteState(data.ontario);
+      if (data.quebec)  setQuebecRouteState(data.quebec);
+    } catch(e) { console.error('Load routes error:', e); }
+  }, []);
 
   const login = useCallback((role, name) => setUser({ role, name, initials: name.split(' ').map(n => n[0]).join('') }), []);
   const logout = useCallback(() => setUser(null), []);
@@ -81,6 +118,7 @@ export function AppProvider({ children }) {
     fetchDrivers();
     fetchClients();
     fetchInvoices();
+    fetchRoutes();
 
     // Auto-refresh orders every 10 seconds to catch new WooCommerce orders
     const iv = setInterval(() => fetchOrders(), 10000);
@@ -171,4 +209,3 @@ export function AppProvider({ children }) {
 }
 
 export const useApp = () => useContext(AppContext);
-
