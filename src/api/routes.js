@@ -44,6 +44,54 @@ router.get('/orders/search', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── ROUTE PROGRESS ───────────────────────────────────────
+
+// Load today's route progress
+router.get('/routes/progress', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const { rows } = await pool.query(
+      `SELECT route, started, start_time, holiday, done, stop_status, arrivals 
+       FROM route_days WHERE date = $1`,
+      [today]
+    );
+    const result = {};
+    for (const row of rows) {
+      result[row.route] = {
+        started:    row.started,
+        startTime:  row.start_time,
+        holiday:    row.holiday,
+        done:       row.done,
+        stopStatus: row.stop_status || (row.route === 'ontario' ? new Array(15).fill(null) : new Array(10).fill(null)),
+        arrivals:   row.arrivals   || (row.route === 'ontario' ? new Array(15).fill(null) : new Array(10).fill(null)),
+      };
+    }
+    res.json(result);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Save route progress
+router.post('/routes/:route/progress', async (req, res) => {
+  try {
+    const { route } = req.params;
+    const { started, startTime, holiday, done, stopStatus, arrivals } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+    await pool.query(`
+      INSERT INTO route_days (route, date, started, start_time, holiday, done, stop_status, arrivals)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (route, date) DO UPDATE SET
+        started    = EXCLUDED.started,
+        start_time = EXCLUDED.start_time,
+        holiday    = EXCLUDED.holiday,
+        done       = EXCLUDED.done,
+        stop_status = EXCLUDED.stop_status,
+        arrivals   = EXCLUDED.arrivals
+    `, [route, today, started, startTime, holiday, done,
+        JSON.stringify(stopStatus), JSON.stringify(arrivals)]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // Get all orders
 router.get('/orders', async (req, res) => {
   try {
