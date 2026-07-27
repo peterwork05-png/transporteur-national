@@ -14,6 +14,7 @@ export default function AdminInvoices() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [deleting,  setDeleting]  = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const fileRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -84,6 +85,24 @@ export default function AdminInvoices() {
       await fetchInvoices();
       setSelected(prev => ({ ...prev, type: newType }));
     } catch(e) { console.error(e); }
+  };
+
+  const handleGeneratePDF = async () => {
+    setGenerating(true);
+    setUploadMsg('Generating PDF...');
+    try {
+      const res  = await fetch(`/api/invoices/${selected.id}/generate-pdf`, { method:'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setUploadMsg('✅ PDF generated!');
+        await fetchInvoices();
+        setSelected(prev => prev ? { ...prev, pdf_url: data.pdf_url } : null);
+      } else {
+        setUploadMsg(`❌ ${data.error}`);
+      }
+    } catch(e) { setUploadMsg(`❌ ${e.message}`); }
+    setGenerating(false);
+    setTimeout(() => setUploadMsg(''), 4000);
   };
 
   const handlePDFUpload = async (invoiceId, file) => {
@@ -181,7 +200,7 @@ export default function AdminInvoices() {
               <div>
                 <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
                 <p className="text-sm font-medium mt-0.5">{getClientName(inv)}</p>
-                <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{inv.dates || `${inv.date_from||''} – ${inv.date_to||''}`}</p>
+                <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}</p>
               </div>
               <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'} flex-shrink-0`}>
                 {inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}
@@ -205,7 +224,6 @@ export default function AdminInvoices() {
           style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
           <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto"
             style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
-
             <div className="px-6 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
               <div>
                 <p className="font-mono text-xs" style={{color:'rgba(250,247,240,0.4)'}}>Invoice #{selected.id}</p>
@@ -260,10 +278,10 @@ export default function AdminInvoices() {
               {/* Invoice info */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  {label:'Client',     val: getClientName(selected)},
-                  {label:'Type',       val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
-                  {label:'Period',     val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
-                  {label:'Days',       val: selected.days ? `${selected.days} days` : null},
+                  {label:'Client',  val: getClientName(selected)},
+                  {label:'Type',    val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
+                  {label:'Period',  val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
+                  {label:'Days',    val: selected.days ? `${selected.days} days` : null},
                 ].filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
                     <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
@@ -277,12 +295,14 @@ export default function AdminInvoices() {
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
                 {(() => {
                   const total = parseFloat(selected.amount||0);
-                  const sub = total / (1 + TPS + TVQ);
+                  const sub   = selected.subtotal ? parseFloat(selected.subtotal) : total / (1 + TPS + TVQ);
+                  const tps   = selected.tps ? parseFloat(selected.tps) : sub * TPS;
+                  const tvq   = selected.tvq ? parseFloat(selected.tvq) : sub * TVQ;
                   return (
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span>{fmt(sub)}</span></div>
-                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TPS (5%)</span><span>{fmt(sub*TPS)}</span></div>
-                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TVQ (9.975%)</span><span>{fmt(sub*TVQ)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TPS (5%)</span><span>{fmt(tps)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TVQ (9.975%)</span><span>{fmt(tvq)}</span></div>
                       <div className="flex justify-between font-bold pt-2 text-sm" style={{borderTop:'0.5px solid var(--tn-border)'}}>
                         <span>Total</span><span style={{color:'var(--tn-red)'}}>{fmt(total)}</span>
                       </div>
@@ -311,21 +331,36 @@ export default function AdminInvoices() {
                       <p className="text-sm font-medium flex-1" style={{color:'#0F6E56'}}>PDF attached</p>
                       <a href={selected.pdf_url} target="_blank" rel="noreferrer"
                         className="btn btn-sm" style={{background:'#0F6E56',color:'white'}}>
-                        View PDF
+                        View
                       </a>
                     </div>
-                    <button onClick={() => fileRef.current?.click()}
-                      className="btn btn-outline btn-sm w-full justify-center text-xs">
-                      Replace PDF
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={handleGeneratePDF} disabled={generating}
+                        className="btn btn-outline btn-sm flex-1 justify-center text-xs"
+                        style={{opacity:generating?0.6:1}}>
+                        {generating ? '⏳ Generating...' : '🔄 Regenerate PDF'}
+                      </button>
+                      <button onClick={() => fileRef.current?.click()}
+                        className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+                        📤 Upload PDF
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div>
-                    <div className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer"
+                  <div className="space-y-2">
+                    {/* Generate PDF button for auto-generated invoices */}
+                    {selected.type === 'local' && (
+                      <button onClick={handleGeneratePDF} disabled={generating}
+                        className="btn w-full justify-center"
+                        style={{background:'var(--tn-red)', color:'white', opacity:generating?0.6:1}}>
+                        {generating ? '⏳ Generating PDF...' : '✨ Generate PDF automatically'}
+                      </button>
+                    )}
+                    <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
                       style={{borderColor:'var(--tn-border-strong)'}}
                       onClick={() => fileRef.current?.click()}>
                       <p className="text-2xl mb-2">📤</p>
-                      <p className="text-sm font-medium">Upload invoice PDF</p>
+                      <p className="text-sm font-medium">Or upload existing PDF</p>
                       <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Click to select PDF file</p>
                     </div>
                   </div>
@@ -422,7 +457,6 @@ export default function AdminInvoices() {
                 </select>
               </div>
             </div>
-
             {form.type==='contract' && !form.amount && (() => {
               const {sub,tps,tvq,total} = calcTotals();
               return (
@@ -434,7 +468,6 @@ export default function AdminInvoices() {
                 </div>
               );
             })()}
-
             <div className="flex gap-2 mt-4">
               <button onClick={() => setShowNew(false)} className="btn btn-outline flex-1">Cancel</button>
               <button onClick={handleCreate} disabled={!form.invNum}
