@@ -1,36 +1,41 @@
 import { checkGmailRemittances } from './gmail.js';
+import { generateLocalInvoices, getInvoicePeriods } from './autoInvoice.js';
 
-// Run Gmail scan every Thursday, every 2 hours from 11am to 3pm (ET)
 export function startScheduler() {
   console.log('📅 Scheduler started');
 
   setInterval(async () => {
     const now = new Date();
-    
-    // Convert to Eastern Time (UTC-4 in summer, UTC-5 in winter)
     const etOffset = isDST(now) ? -4 : -5;
     const etHour   = (now.getUTCHours() + etOffset + 24) % 24;
-    const etDay    = now.getUTCDay(); // 0=Sun, 4=Thu
+    const etDay    = now.getUTCDay();
+    const etDate   = now.getUTCDate();
+    const isTopOfHour = now.getUTCMinutes() < 5;
 
-    // Only run on Thursdays (4) between 11am and 3pm ET
-    // Check every 2 hours: 11am, 1pm, 3pm
-    const isThursday   = etDay === 4;
-    const isValidHour  = [11, 13, 15].includes(etHour);
-    const isTopOfHour  = now.getUTCMinutes() < 5; // within first 5 minutes of the hour
-
-    if (isThursday && isValidHour && isTopOfHour) {
+    // Gmail scan — Thursdays 11am, 1pm, 3pm ET
+    if (etDay === 4 && [11, 13, 15].includes(etHour) && isTopOfHour) {
       console.log(`📧 Thursday auto-scan triggered at ${etHour}:00 ET`);
       try {
         const results = await checkGmailRemittances();
-        console.log(`✅ Auto-scan complete: ${results.matched?.length || 0} matched, ${results.unmatched?.length || 0} unmatched`);
-      } catch(err) {
-        console.error('❌ Auto-scan error:', err.message);
-      }
+        console.log(`✅ Auto-scan complete: ${results.matched?.length || 0} matched`);
+      } catch(err) { console.error('❌ Auto-scan error:', err.message); }
     }
-  }, 5 * 60 * 1000); // Check every 5 minutes (lightweight check)
+
+    // Auto-invoice — 15th and last day of month at noon ET
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getUTCMonth() + 1, 0).getDate();
+    if (etHour === 12 && isTopOfHour && (etDate === 15 || etDate === lastDayOfMonth)) {
+      const { period1, period2 } = getInvoicePeriods(now);
+      const period = etDate === 15 ? period1 : period2;
+      console.log(`📄 Auto-invoice triggered for ${period.from} – ${period.to}`);
+      try {
+        const results = await generateLocalInvoices(period.from, period.to);
+        console.log(`✅ Auto-invoice: ${results.invoices?.length || 0} invoices created`);
+      } catch(err) { console.error('❌ Auto-invoice error:', err.message); }
+    }
+
+  }, 5 * 60 * 1000);
 }
 
-// Detect Daylight Saving Time for Eastern timezone
 function isDST(date) {
   const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset();
   const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
