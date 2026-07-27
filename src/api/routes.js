@@ -850,15 +850,33 @@ router.post('/setup/add-elaine', async (req, res) => {
 } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// Generate PDF  // Generate PDF for a local invoice
-router.post('/invoices/:id/generate-pdf', async (req, res) => {
+// Generate PDF for a local invoice - returns HTML for browser printing
+router.get('/invoices/:id/preview', async (req, res) => {
   try {
     const { rows: invRows } = await pool.query(
       `SELECT i.*, c.client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
       [req.params.id]
     );
-    if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    if (invRows.length === 0) return res.status(404).send('Invoice not found');
     const inv = invRows[0];
+
+    const { rows: orders } = await pool.query(`
+      SELECT o.* FROM orders o
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE c.client_group = $1
+        AND o.status = 'delivered'
+        AND o.date >= $2 AND o.date <= $3
+      ORDER BY o.date ASC
+    `, [inv.client_group, inv.date_from, inv.date_to]);
+
+    const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
+    const html = generateInvoiceHTML(inv, orders, inv.client_group);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch(err) {
+    res.status(500).send('Error: ' + err.message);
+  }
+});
 
     // Get orders for this invoice period
     const { rows: orders } = await pool.query(`
