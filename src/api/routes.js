@@ -818,7 +818,10 @@ router.post('/upload/delivery-photo', async (req, res) => {
   } catch(err) {
     console.error('Photo upload error:', err);
     res.status(500).json({ error: err.message });
-  }// Manual trigger for auto-invoice (for testing)
+  }
+});
+
+// Manual trigger for auto-invoice (for testing)
 router.post('/invoices/generate-local', async (req, res) => {
   try {
     const { dateFrom, dateTo, clientGroup } = req.body;
