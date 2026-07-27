@@ -818,7 +818,33 @@ router.post('/upload/delivery-photo', async (req, res) => {
   } catch(err) {
     console.error('Photo upload error:', err);
     res.status(500).json({ error: err.message });
-  }
+  }// Manual trigger for auto-invoice (for testing)
+router.post('/invoices/generate-local', async (req, res) => {
+  try {
+    const { dateFrom, dateTo, clientGroup } = req.body;
+    const { generateLocalInvoices, getInvoicePeriods } = await import('./autoInvoice.js');
+    let from = dateFrom, to = dateTo;
+    if (!from || !to) {
+      const today = new Date();
+      const { period1, period2 } = getInvoicePeriods(today);
+      const period = today.getDate() <= 15 ? period1 : period2;
+      from = period.from; to = period.to;
+    }
+    const results = await generateLocalInvoices(from, to, clientGroup);
+    res.json(results);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add Elaine to BEG
+router.post('/setup/add-elaine', async (req, res) => {
+  try {
+    await pool.query(`
+      INSERT INTO clients (id, name, email, password, role, client_group, language, signoff, active)
+      VALUES ('beg_finance3', 'Bureau en Gros #299', 'Elaine.Olivier@staples.ca', 'staples2026', 'finance', 'beg', 'fr', 'MERCI DE VOTRE CONFIANCE!', true)
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, active = true
+    `);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
 export default router;
