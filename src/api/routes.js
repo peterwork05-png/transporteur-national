@@ -847,8 +847,10 @@ router.post('/setup/add-elaine', async (req, res) => {
       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, active = true
     `);
     res.json({ success: true });
-  } catch(err) { res.status(500).json({ error: err.message }); }
-  // Generate PDF for a local invoice
+} catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Generate PDF  // Generate PDF for a local invoice
 router.post('/invoices/:id/generate-pdf', async (req, res) => {
   try {
     const { rows: invRows } = await pool.query(
