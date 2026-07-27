@@ -8,16 +8,16 @@ export async function generateLocalInvoices(dateFrom, dateTo, clientGroup) {
   try {
     console.log(`📄 Generating local invoices from ${dateFrom} to ${dateTo}`);
 
-    // Get all client groups to process
+    // Get all client groups to process - use DISTINCT to avoid duplicates
     const cgQuery = clientGroup
-      ? `SELECT DISTINCT c.client_group, c.name FROM clients c WHERE c.client_group = $1 AND c.role = 'ops' AND c.active = true`
-      : `SELECT DISTINCT c.client_group, c.name FROM clients c WHERE c.role = 'ops' AND c.active = true AND c.client_group IS NOT NULL`;
+      ? `SELECT DISTINCT ON (c.client_group) c.client_group, c.name, c.id FROM clients c WHERE c.client_group = $1 AND c.role = 'ops' AND c.active = true LIMIT 1`
+      : `SELECT DISTINCT ON (c.client_group) c.client_group, c.name, c.id FROM clients c WHERE c.role = 'ops' AND c.active = true AND c.client_group IS NOT NULL ORDER BY c.client_group, c.id`;
 
     const cgParams = clientGroup ? [clientGroup] : [];
     const { rows: clientGroups } = await pool.query(cgQuery, cgParams);
     const results = [];
 
-    for (const { client_group, name } of clientGroups) {
+    for (const { client_group, name, id: clientId } of clientGroups) {
       const { rows: orders } = await pool.query(`
         SELECT o.* FROM orders o
         LEFT JOIN clients c ON o.client_id = c.id
@@ -37,17 +37,11 @@ export async function generateLocalInvoices(dateFrom, dateTo, clientGroup) {
       const tvq   = subtotal * TVQ;
       const total = subtotal + tps + tvq;
 
-      const { rows: clients } = await pool.query(
-        `SELECT id FROM clients WHERE client_group = $1 AND role = 'ops' LIMIT 1`,
-        [client_group]
-      );
-      if (clients.length === 0) continue;
-
       const { rows: inv } = await pool.query(`
         INSERT INTO invoices (client_id, type, date_from, date_to, subtotal, tps, tvq, total, status)
         VALUES ($1, 'local', $2, $3, $4, $5, $6, $7, 'pending')
         RETURNING id
-      `, [clients[0].id, dateFrom, dateTo,
+      `, [clientId, dateFrom, dateTo,
           subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2)]);
 
       results.push({
