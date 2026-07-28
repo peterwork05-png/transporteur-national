@@ -354,15 +354,17 @@ const handlePreview = () => {
                   <div className="space-y-2">
                     {/* Generate PDF button for auto-generated invoices */}
                     {selected.type === 'local' && (
-                      <button onClick={handleGeneratePDF} disabled={uploading}
-  className="btn w-full justify-center"
-  style={{background:'var(--tn-red)', color:'white', opacity:uploading?0.6:1}}>
-  {uploading ? '⏳ Generating...' : '✨ Generate PDF'}
-</button>
-<button onClick={handlePreview}
-  className="btn btn-outline w-full justify-center mt-1 text-xs">
-  👁 Preview HTML
-</button>
+                      <div className="space-y-1">
+  <button onClick={handleGeneratePDF} disabled={uploading}
+    className="btn w-full justify-center"
+    style={{background:'var(--tn-red)', color:'white', opacity:uploading?0.6:1}}>
+    {uploading ? '⏳ Generating...' : '✨ Generate PDF'}
+  </button>
+  <button onClick={handlePreview}
+    className="btn btn-outline w-full justify-center text-xs">
+    👁 Preview HTML
+  </button>
+</div>
                     )}
                     <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
                       style={{borderColor:'var(--tn-border-strong)'}}
