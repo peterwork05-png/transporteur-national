@@ -943,7 +943,13 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// Delete order
+router.delete('/orders/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 // Delete invoice
 router.delete('/invoices/:id', async (req, res) => {
   try {
