@@ -86,9 +86,25 @@ export default function AdminInvoices() {
     } catch(e) { console.error(e); }
   };
 
-  const handleGeneratePDF = () => {
-    window.open(`/api/invoices/${selected.id}/preview`, '_blank');
-  };
+const handleGeneratePDF = async () => {
+  setUploading(true);
+  setUploadMsg('Generating PDF...');
+  try {
+    const res  = await fetch(`/api/invoices/${selected.id}/generate-pdf`, { method:'POST' });
+    const data = await res.json();
+    if (data.success) {
+      setUploadMsg('✅ PDF generated!');
+      await fetchInvoices();
+      setSelected(prev => prev ? { ...prev, pdf_url: data.pdf_url } : null);
+    } else { setUploadMsg(`❌ ${data.error}`); }
+  } catch(e) { setUploadMsg(`❌ ${e.message}`); }
+  setUploading(false);
+  setTimeout(() => setUploadMsg(''), 4000);
+};
+
+const handlePreview = () => {
+  window.open(`/api/invoices/${selected.id}/preview`, '_blank');
+};
 
   const handlePDFUpload = async (invoiceId, file) => {
     setUploading(true);
@@ -320,10 +336,14 @@ export default function AdminInvoices() {
                       </a>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={handleGeneratePDF}
-                        className="btn btn-outline btn-sm flex-1 justify-center text-xs">
-                        🔄 Preview & Print PDF
-                      </button>
+                      <button onClick={handleGeneratePDF} disabled={uploading}
+  className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+  {uploading ? '⏳...' : '🔄 Regenerate PDF'}
+</button>
+<button onClick={handlePreview}
+  className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+  👁 Preview
+</button>
                       <button onClick={() => fileRef.current?.click()}
                         className="btn btn-outline btn-sm flex-1 justify-center text-xs">
                         📤 Upload PDF
@@ -334,11 +354,15 @@ export default function AdminInvoices() {
                   <div className="space-y-2">
                     {/* Generate PDF button for auto-generated invoices */}
                     {selected.type === 'local' && (
-                      <button onClick={handleGeneratePDF}
-                        className="btn w-full justify-center"
-                        style={{background:'var(--tn-red)', color:'white'}}>
-                        ✨ Preview & Print PDF
-                      </button>
+                      <button onClick={handleGeneratePDF} disabled={uploading}
+  className="btn w-full justify-center"
+  style={{background:'var(--tn-red)', color:'white', opacity:uploading?0.6:1}}>
+  {uploading ? '⏳ Generating...' : '✨ Generate PDF'}
+</button>
+<button onClick={handlePreview}
+  className="btn btn-outline w-full justify-center mt-1 text-xs">
+  👁 Preview HTML
+</button>
                     )}
                     <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
                       style={{borderColor:'var(--tn-border-strong)'}}
