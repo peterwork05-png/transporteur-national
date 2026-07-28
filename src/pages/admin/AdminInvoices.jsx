@@ -435,7 +435,7 @@ export default function AdminInvoices() {
               <button onClick={() => setShowGenerate(false)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
             <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>
-              Automatically creates invoices for all local clients (Bureau en Gros, Jonarts, A&E Bath) based on delivered orders in the selected period.
+              Creates one invoice per client (Bureau en Gros, Jonarts, A&E Bath) grouping all their delivered orders in the selected period.
             </p>
             <div className="space-y-3">
               <div className="flex gap-2 mb-1">
