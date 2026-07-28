@@ -14,7 +14,6 @@ export default function AdminInvoices() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [deleting,  setDeleting]  = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const fileRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -87,22 +86,8 @@ export default function AdminInvoices() {
     } catch(e) { console.error(e); }
   };
 
-  const handleGeneratePDF = async () => {
-    setGenerating(true);
-    setUploadMsg('Generating PDF...');
-    try {
-      const res  = await fetch(`/api/invoices/${selected.id}/generate-pdf`, { method:'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setUploadMsg('✅ PDF generated!');
-        await fetchInvoices();
-        setSelected(prev => prev ? { ...prev, pdf_url: data.pdf_url } : null);
-      } else {
-        setUploadMsg(`❌ ${data.error}`);
-      }
-    } catch(e) { setUploadMsg(`❌ ${e.message}`); }
-    setGenerating(false);
-    setTimeout(() => setUploadMsg(''), 4000);
+  const handleGeneratePDF = () => {
+    window.open(`/api/invoices/${selected.id}/preview`, '_blank');
   };
 
   const handlePDFUpload = async (invoiceId, file) => {
@@ -335,10 +320,9 @@ export default function AdminInvoices() {
                       </a>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={handleGeneratePDF} disabled={generating}
-                        className="btn btn-outline btn-sm flex-1 justify-center text-xs"
-                        style={{opacity:generating?0.6:1}}>
-                        {generating ? '⏳ Generating...' : '🔄 Regenerate PDF'}
+                      <button onClick={handleGeneratePDF}
+                        className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+                        🔄 Preview & Print PDF
                       </button>
                       <button onClick={() => fileRef.current?.click()}
                         className="btn btn-outline btn-sm flex-1 justify-center text-xs">
@@ -350,10 +334,10 @@ export default function AdminInvoices() {
                   <div className="space-y-2">
                     {/* Generate PDF button for auto-generated invoices */}
                     {selected.type === 'local' && (
-                      <button onClick={handleGeneratePDF} disabled={generating}
+                      <button onClick={handleGeneratePDF}
                         className="btn w-full justify-center"
-                        style={{background:'var(--tn-red)', color:'white', opacity:generating?0.6:1}}>
-                        {generating ? '⏳ Generating PDF...' : '✨ Generate PDF automatically'}
+                        style={{background:'var(--tn-red)', color:'white'}}>
+                        ✨ Preview & Print PDF
                       </button>
                     )}
                     <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
