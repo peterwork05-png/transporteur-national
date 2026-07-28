@@ -961,17 +961,6 @@ router.get('/orders/:id/proof-pdf', async (req, res) => {
   }
 });
 
-    if (!pdfRes.ok) throw new Error(`PDFShift error: ${await pdfRes.text()}`);
-    const pdfBuffer = await pdfRes.arrayBuffer();
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="proof-${req.params.id}.pdf"`);
-    res.send(Buffer.from(pdfBuffer));
-  } catch(err) {
-    console.error('Proof PDF error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 export default router;
 
