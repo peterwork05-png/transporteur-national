@@ -877,6 +877,62 @@ router.get('/invoices/:id/preview', async (req, res) => {
     res.status(500).send('Error: ' + err.message);
   }
 });
+// Generate real PDF via PDFShift
+router.post('/invoices/:id/generate-pdf', async (req, res) => {
+  try {
+    const { rows: invRows } = await pool.query(
+      `SELECT i.*, c.client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+    const { rows: orders } = await pool.query(`
+      SELECT o.* FROM orders o
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE c.client_group = $1
+        AND o.status = 'delivered'
+        AND o.date >= $2 AND o.date <= $3
+      ORDER BY o.date ASC
+    `, [inv.client_group, inv.date_from, inv.date_to]);
+    const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
+    const html = generateInvoiceHTML(inv, orders, inv.client_group);
+    const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`api:${process.env.PDFSHIFT_API_KEY}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source: html, landscape: false, use_print: false }),
+    });
+    if (!pdfRes.ok) throw new Error(`PDFShift error: ${await pdfRes.text()}`);
+    const pdfBuffer = await pdfRes.arrayBuffer();
+    const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey    = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const timestamp = Math.round(Date.now() / 1000);
+    const publicId  = `invoices/invoice_${req.params.id}`;
+    const { createHash } = await import('crypto');
+    const signature = createHash('sha1').update(`public_id=${publicId}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+    const fields = { file: `data:application/pdf;base64,${pdfBase64}`, public_id: publicId, timestamp: String(timestamp), api_key: apiKey, signature };
+    let body = '';
+    for (const [key, value] of Object.entries(fields)) {
+      body += `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`;
+    }
+    body += `--${boundary}--\r\n`;
+    const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+      { method: 'POST', headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` }, body }
+    );
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok || uploadData.error) throw new Error(uploadData.error?.message || 'Upload failed');
+    await pool.query(`UPDATE invoices SET pdf_url = $1 WHERE id = $2`, [uploadData.secure_url, req.params.id]);
+    res.json({ success: true, pdf_url: uploadData.secure_url });
+  } catch(err) {
+    console.error('Generate PDF error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;
 
