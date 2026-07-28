@@ -17,7 +17,6 @@ const PERIODS = [
 const fmt    = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
 const fmtDate = d => d ? String(d).split('T')[0] : '—';
 
-// Auto-determine if invoice is overdue (pending + older than 14 days)
 const isOverdue = inv => {
   try {
     if (!inv || inv.status === 'paid') return false;
@@ -46,8 +45,8 @@ export default function ClientPortal() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [selectedOrder,   setSelectedOrder]   = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [downloadingProof, setDownloadingProof] = useState(false);
 
-  // Clean up body scroll on unmount
   useEffect(() => {
     return () => { document.body.style.overflow = ''; };
   }, []);
@@ -95,7 +94,6 @@ export default function ClientPortal() {
 
   const isFinance = client?.role === 'finance';
 
-  // Orders filtering
   const filteredOrders = orders.filter(o => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -106,7 +104,6 @@ export default function ClientPortal() {
            o.po_number?.toLowerCase().includes(s);
   });
 
-  // Invoices filtering — auto-compute overdue
   const filteredInvoices = invoices.filter(inv => {
     const overdue = isOverdue(inv);
     if (invFilter === 'pending')  return inv.status === 'pending' && !overdue;
@@ -115,7 +112,6 @@ export default function ClientPortal() {
     return true;
   });
 
-  // Stats
   const delivered  = orders.filter(o => o.status === 'delivered').length;
   const inProgress = orders.filter(o => o.status !== 'delivered').length;
   const totalValue = orders.reduce((s,o) => s + parseFloat(o.amount||0), 0);
@@ -127,19 +123,9 @@ export default function ClientPortal() {
       <div style={{position:'fixed',top:'-80px',right:'-80px',width:'300px',height:'300px',background:'var(--tn-red)',borderRadius:'50%',opacity:0.06,pointerEvents:'none'}}/>
       <div style={{position:'fixed',bottom:'-60px',left:'-60px',width:'200px',height:'200px',background:'var(--tn-gold)',borderRadius:'50%',opacity:0.08,pointerEvents:'none'}}/>
       
-      {/* Back button */}
       <div style={{paddingTop:'max(20px, env(safe-area-inset-top))', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'8px', position:'relative', zIndex:10}}>
         <button onClick={() => window.history.back()}
-          style={{
-            minHeight:'44px', minWidth:'80px',
-            display:'flex', alignItems:'center', gap:'6px',
-            color:'rgba(250,247,240,0.5)',
-            fontSize:'14px',
-            background:'rgba(250,247,240,0.06)',
-            border:'0.5px solid rgba(139,105,20,0.2)',
-            borderRadius:'10px',
-            padding:'0 14px',
-          }}>
+          style={{minHeight:'44px', minWidth:'80px', display:'flex', alignItems:'center', gap:'6px', color:'rgba(250,247,240,0.5)', fontSize:'14px', background:'rgba(250,247,240,0.06)', border:'0.5px solid rgba(139,105,20,0.2)', borderRadius:'10px', padding:'0 14px'}}>
           ← Back
         </button>
       </div>
@@ -199,16 +185,7 @@ export default function ClientPortal() {
             </div>
           </div>
           <button onClick={() => setClient(null)}
-            style={{
-              minWidth:'80px', minHeight:'44px',
-              background:'rgba(250,247,240,0.08)',
-              color:'rgba(250,247,240,0.6)',
-              border:'0.5px solid rgba(139,105,20,0.2)',
-              borderRadius:'10px',
-              fontSize:'13px',
-              fontWeight:'500',
-              padding:'0 12px',
-            }}>
+            style={{minWidth:'80px', minHeight:'44px', background:'rgba(250,247,240,0.08)', color:'rgba(250,247,240,0.6)', border:'0.5px solid rgba(139,105,20,0.2)', borderRadius:'10px', fontSize:'13px', fontWeight:'500', padding:'0 12px'}}>
             Sign out
           </button>
         </div>
@@ -236,26 +213,17 @@ export default function ClientPortal() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4">
-          {!isFinance && (
-            <button onClick={()=>setTab('orders')}
-              className="px-4 py-1.5 rounded-lg text-sm font-medium"
-              style={{background:tab==='orders'?'var(--tn-red)':'white',color:tab==='orders'?'white':'var(--tn-gold)',border:'0.5px solid var(--tn-border)'}}>
-              Orders
-            </button>
-          )}
+          <button onClick={()=>setTab('orders')}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium"
+            style={{background:tab==='orders'?'var(--tn-red)':'white',color:tab==='orders'?'white':'var(--tn-gold)',border:'0.5px solid var(--tn-border)'}}>
+            Orders
+          </button>
           {isFinance && (
-            <>
-              <button onClick={()=>setTab('orders')}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium"
-                style={{background:tab==='orders'?'var(--tn-red)':'white',color:tab==='orders'?'white':'var(--tn-gold)',border:'0.5px solid var(--tn-border)'}}>
-                Orders
-              </button>
-              <button onClick={()=>setTab('invoices')}
-                className="px-4 py-1.5 rounded-lg text-sm font-medium"
-                style={{background:tab==='invoices'?'var(--tn-red)':'white',color:tab==='invoices'?'white':'var(--tn-gold)',border:'0.5px solid var(--tn-border)'}}>
-                Invoices
-              </button>
-            </>
+            <button onClick={()=>setTab('invoices')}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium"
+              style={{background:tab==='invoices'?'var(--tn-red)':'white',color:tab==='invoices'?'white':'var(--tn-gold)',border:'0.5px solid var(--tn-border)'}}>
+              Invoices
+            </button>
           )}
         </div>
 
@@ -310,6 +278,14 @@ export default function ClientPortal() {
                         <div className="flex items-center gap-1 mt-1 pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
                           <span className="text-xs" style={{color:'#0F6E56'}}>✓ {order.delivered_at}</span>
                           {order.driver_name && <span className="text-xs" style={{color:'var(--tn-gold)'}}>· {order.driver_name}</span>}
+                          {order.photo_url && (
+                            <a href={`/api/orders/${order.id}/proof-pdf`} target="_blank" rel="noreferrer"
+                              className="text-xs font-medium ml-auto flex-shrink-0"
+                              style={{color:'var(--tn-red)'}}
+                              onClick={e=>e.stopPropagation()}>
+                              ⬇ Proof
+                            </a>
+                          )}
                         </div>
                       )}
                       {(order.status==='enroute'||order.status==='picked') && (
@@ -468,10 +444,18 @@ export default function ClientPortal() {
                       ))}
                     </div>
                   )}
+                  {(selectedOrder.photo_url || selectedOrder.signature_url) && (
+                    <a href={`/api/orders/${selectedOrder.id}/proof-pdf`}
+                      target="_blank" rel="noreferrer"
+                      className="btn w-full justify-center"
+                      style={{background:'var(--tn-red)',color:'white', display:'block', textAlign:'center'}}>
+                      ⬇ Download proof of delivery
+                    </a>
+                  )}
                 </div>
               )}
               <button onClick={()=>setSelectedOrder(null)} className="btn w-full justify-center"
-                style={{background:'var(--tn-red)',color:'white'}}>Close</button>
+                style={{background:'var(--tn-dark)',color:'white'}}>Close</button>
             </div>
           </div>
         </div>
@@ -514,7 +498,6 @@ export default function ClientPortal() {
                 ))}
               </div>
 
-              {/* Amount breakdown */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
                 <div className="space-y-1.5">
@@ -527,10 +510,9 @@ export default function ClientPortal() {
                 </div>
               </div>
 
-              {/* PDF */}
               {selectedInvoice.pdf_url ? (
                 <a href={selectedInvoice.pdf_url} target="_blank" rel="noreferrer"
-                  className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                  className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white', display:'block', textAlign:'center'}}>
                   ⬇ Download Invoice PDF
                 </a>
               ) : (
