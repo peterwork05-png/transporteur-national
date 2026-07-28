@@ -995,6 +995,20 @@ router.post('/push/test', async (req, res) => {
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Manual contract invoice generation
+router.post('/invoices/generate-contract', async (req, res) => {
+  try {
+    const { dateFrom, dateTo, days } = req.body;
+    const { generateContractInvoices, getPreviousWeekDates } = await import('./contractInvoice.js');
+    let from = dateFrom, to = dateTo;
+    if (!from || !to) {
+      const prev = getPreviousWeekDates();
+      from = prev.from; to = prev.to;
+    }
+    const results = await generateContractInvoices(from, to, days || 5);
+    res.json(results);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;
 
