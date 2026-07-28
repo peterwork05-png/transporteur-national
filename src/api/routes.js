@@ -878,52 +878,6 @@ router.get('/invoices/:id/preview', async (req, res) => {
   }
 });
 
-    // Get orders for this invoice period
-    const { rows: orders } = await pool.query(`
-      SELECT o.* FROM orders o
-      LEFT JOIN clients c ON o.client_id = c.id
-      WHERE c.client_group = $1
-        AND o.status = 'delivered'
-        AND o.date >= $2 AND o.date <= $3
-      ORDER BY o.date ASC
-    `, [inv.client_group, inv.date_from, inv.date_to]);
-
-    const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    const html = generateInvoiceHTML(inv, orders, inv.client_group);
-
-    // Upload HTML as raw file to Cloudinary
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey    = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    const timestamp = Math.round(Date.now() / 1000);
-    const publicId  = `invoices/invoice_${req.params.id}`;
-    const { createHash } = await import('crypto');
-    const signature = createHash('sha1').update(`public_id=${publicId}&timestamp=${timestamp}${apiSecret}`).digest('hex');
-
-    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
-    const htmlBase64 = Buffer.from(html).toString('base64');
-    let body = '';
-    const fields = { file: `data:text/html;base64,${htmlBase64}`, public_id: publicId, timestamp: String(timestamp), api_key: apiKey, signature };
-    for (const [key, value] of Object.entries(fields)) {
-      body += `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`;
-    }
-    body += `--${boundary}--\r\n`;
-
-    const uploadRes = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-      { method: 'POST', headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` }, body }
-    );
-    const uploadData = await uploadRes.json();
-    if (!uploadRes.ok || uploadData.error) throw new Error(uploadData.error?.message || 'Upload failed');
-
-    await pool.query(`UPDATE invoices SET pdf_url = $1 WHERE id = $2`, [uploadData.secure_url, req.params.id]);
-    res.json({ success: true, pdf_url: uploadData.secure_url });
-  } catch(err) {
-    console.error('Generate PDF error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
