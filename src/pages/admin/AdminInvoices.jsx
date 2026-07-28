@@ -380,7 +380,7 @@ export default function AdminInvoices() {
                 ) : (
                   <div className="space-y-2">
                     {/* Generate PDF button for auto-generated invoices */}
-                    {selected.type === 'local' && (
+                    {(selected.type === 'local' || selected.type === 'contract') && (
                       <button onClick={handleGeneratePDF}
                         className="btn w-full justify-center"
                         style={{background:'var(--tn-red)', color:'white'}}>
