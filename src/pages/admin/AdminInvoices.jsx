@@ -18,9 +18,11 @@ export default function AdminInvoices() {
 
   // Generate invoices modal
   const [showGenerate,  setShowGenerate]  = useState(false);
+  const [genType,       setGenType]       = useState('local'); // 'local' | 'contract'
   const [genDateFrom,   setGenDateFrom]   = useState('');
   const [genDateTo,     setGenDateTo]     = useState('');
   const [genClient,     setGenClient]     = useState('');
+  const [genDays,       setGenDays]       = useState(5);
   const [generating,    setGenerating]    = useState(false);
   const [genResult,     setGenResult]     = useState(null);
 
@@ -29,10 +31,14 @@ export default function AdminInvoices() {
     setGenerating(true);
     setGenResult(null);
     try {
-      const res  = await fetch('/api/invoices/generate-local', {
+      const endpoint = genType === 'contract' ? '/api/invoices/generate-contract' : '/api/invoices/generate-local';
+      const body = genType === 'contract'
+        ? { dateFrom: genDateFrom, dateTo: genDateTo, days: genDays }
+        : { dateFrom: genDateFrom, dateTo: genDateTo, clientGroup: genClient || undefined };
+      const res  = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo, clientGroup: genClient || undefined }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setGenResult(data);
@@ -48,12 +54,24 @@ export default function AdminInvoices() {
     const year  = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
-    if (day <= 15) {
-      setGenDateFrom(`${year}-${month}-01`);
-      setGenDateTo(`${year}-${month}-15`);
+    if (genType === 'contract') {
+      // Previous week Mon-Fri
+      const d = new Date(today);
+      const dayOfWeek = d.getDay();
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) + 6));
+      const friday = new Date(monday);
+      friday.setDate(monday.getDate() + 4);
+      setGenDateFrom(monday.toISOString().split('T')[0]);
+      setGenDateTo(friday.toISOString().split('T')[0]);
     } else {
-      setGenDateFrom(`${year}-${month}-16`);
-      setGenDateTo(`${year}-${month}-${lastDay}`);
+      if (day <= 15) {
+        setGenDateFrom(`${year}-${month}-01`);
+        setGenDateTo(`${year}-${month}-15`);
+      } else {
+        setGenDateFrom(`${year}-${month}-16`);
+        setGenDateTo(`${year}-${month}-${lastDay}`);
+      }
     }
   };
 
@@ -163,7 +181,7 @@ export default function AdminInvoices() {
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Manage and upload invoice PDFs</p>
         </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => { setShowGenerate(true); setGenResult(null); setGenClient(''); setCurrentPeriod(); }}
+        <button onClick={() => { setShowGenerate(true); setGenResult(null); setGenClient(''); setGenType('local'); setCurrentPeriod(); }}
           className="btn btn-sm" style={{background:'var(--tn-gold)',color:'white'}}>
           ⚡ Generate
         </button>
@@ -430,30 +448,57 @@ export default function AdminInvoices() {
       {/* Generate invoices modal */}
       {showGenerate && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{background:'var(--tn-cream)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-lg">⚡ Generate local invoices</h2>
+              <h2 className="font-semibold text-lg">⚡ Generate invoices</h2>
               <button onClick={() => setShowGenerate(false)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
+
+            {/* Type toggle */}
+            <div className="flex gap-1 p-1 rounded-xl mb-4" style={{background:'var(--tn-warm)'}}>
+              {[['local','📦 Local'],['contract','🗺️ Contract']].map(([val,label]) => (
+                <button key={val} onClick={() => { setGenType(val); setGenResult(null); }}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
+                  style={{background:genType===val?'var(--tn-red)':'transparent', color:genType===val?'white':'var(--tn-gold)'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>
-              Creates one invoice per client (Bureau en Gros, Jonarts, A&E Bath) grouping all their delivered orders in the selected period.
+              {genType === 'local'
+                ? 'Creates one invoice per client grouping all their delivered orders in the selected period.'
+                : 'Creates Ontario and Québec contract invoices for Bureau en Gros for the selected week.'}
             </p>
+
             <div className="space-y-3">
               <div className="flex gap-2 mb-1">
-                <button onClick={setCurrentPeriod}
-                  className="btn btn-outline btn-sm text-xs">
-                  Current period
+                <button onClick={setCurrentPeriod} className="btn btn-outline btn-sm text-xs">
+                  {genType === 'contract' ? 'Previous week' : 'Current period'}
                 </button>
               </div>
-              <div>
-                <label className="label">Client</label>
-                <select className="input" value={genClient} onChange={e=>setGenClient(e.target.value)}>
-                  <option value="">All clients</option>
-                  <option value="beg">Bureau en Gros only</option>
-                  <option value="jonarts">Jonarts only</option>
-                  <option value="aebath">A&E Bath only</option>
-                </select>
-              </div>
+
+              {genType === 'local' && (
+                <div>
+                  <label className="label">Client</label>
+                  <select className="input" value={genClient} onChange={e=>setGenClient(e.target.value)}>
+                    <option value="">All clients</option>
+                    <option value="beg">Bureau en Gros only</option>
+                    <option value="jonarts">Jonarts only</option>
+                    <option value="aebath">A&E Bath only</option>
+                  </select>
+                </div>
+              )}
+
+              {genType === 'contract' && (
+                <div>
+                  <label className="label">Days worked</label>
+                  <select className="input" value={genDays} onChange={e=>setGenDays(parseInt(e.target.value))}>
+                    {[1,2,3,4,5].map(d => <option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="label">From</label>
                 <input type="date" className="input" value={genDateFrom} onChange={e=>setGenDateFrom(e.target.value)} />
@@ -473,11 +518,11 @@ export default function AdminInvoices() {
                     </p>
                     {genResult.invoices?.map((inv, i) => (
                       <p key={i} className="text-xs mt-1" style={{color:'#0F6E56'}}>
-                        #{inv.invoiceId} — {inv.clientName} — ${inv.total}
+                        #{inv.invoiceId} — {inv.clientName || inv.route} — ${inv.total}
                       </p>
                     ))}
                     {genResult.invoices?.length === 0 && (
-                      <p className="text-xs mt-1" style={{color:'#0F6E56'}}>No delivered orders found for this period.</p>
+                      <p className="text-xs mt-1" style={{color:'#0F6E56'}}>No orders found for this period.</p>
                     )}
                   </>
                 ) : (
