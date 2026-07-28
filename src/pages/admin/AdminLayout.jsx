@@ -1,3 +1,4 @@
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -15,6 +16,7 @@ const NAV = [
 ];
 
 export default function AdminLayout() {
+  usePushNotifications('admin', 'admin');
   const { user, logout } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
