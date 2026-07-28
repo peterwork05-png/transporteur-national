@@ -20,6 +20,7 @@ export default function AdminInvoices() {
   const [showGenerate,  setShowGenerate]  = useState(false);
   const [genDateFrom,   setGenDateFrom]   = useState('');
   const [genDateTo,     setGenDateTo]     = useState('');
+  const [genClient,     setGenClient]     = useState('');
   const [generating,    setGenerating]    = useState(false);
   const [genResult,     setGenResult]     = useState(null);
 
@@ -31,7 +32,7 @@ export default function AdminInvoices() {
       const res  = await fetch('/api/invoices/generate-local', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo }),
+        body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo, clientGroup: genClient || undefined }),
       });
       const data = await res.json();
       setGenResult(data);
@@ -162,7 +163,7 @@ export default function AdminInvoices() {
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Manage and upload invoice PDFs</p>
         </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => { setShowGenerate(true); setGenResult(null); setCurrentPeriod(); }}
+        <button onClick={() => { setShowGenerate(true); setGenResult(null); setGenClient(''); setCurrentPeriod(); }}
           className="btn btn-sm" style={{background:'var(--tn-gold)',color:'white'}}>
           ⚡ Generate
         </button>
@@ -443,6 +444,15 @@ export default function AdminInvoices() {
                   className="btn btn-outline btn-sm text-xs">
                   Current period
                 </button>
+              </div>
+              <div>
+                <label className="label">Client</label>
+                <select className="input" value={genClient} onChange={e=>setGenClient(e.target.value)}>
+                  <option value="">All clients</option>
+                  <option value="beg">Bureau en Gros only</option>
+                  <option value="jonarts">Jonarts only</option>
+                  <option value="aebath">A&E Bath only</option>
+                </select>
               </div>
               <div>
                 <label className="label">From</label>
