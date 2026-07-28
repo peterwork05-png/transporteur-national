@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const STATUS_RANK  = { waiting:0, picked:1, enroute:2, delivered:3 };
 const STATUS_LABEL = { waiting:'Awaiting pickup', picked:'Picked up', enroute:'En route', delivered:'Delivered' };
@@ -31,6 +32,7 @@ export default function DriverLocal() {
   const [sigDataUrl, setSigDataUrl] = useState(null);
   const sigCanvasRef = useRef(null);
   const locationInterval = useRef(null);
+  usePushNotifications('driver', driver?.id);
 
   const fetchMyOrders = useCallback(async () => {
     try {
