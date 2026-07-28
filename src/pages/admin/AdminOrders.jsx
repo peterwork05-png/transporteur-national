@@ -15,15 +15,20 @@ const STATUS_LABELS = { waiting:'Order placed', picked:'Picked up', enroute:'En 
 export default function AdminOrders() {
   const { orders, drivers, fetchOrders, updateOrderStatus } = useApp();
   const [tab,       setTab]       = useState('All');
-  const [period,    setPeriod]    = useState('today');   // 'today' | '7days' | 'all'
+  const [period,    setPeriod]    = useState('today');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
   const [selected,  setSelected]  = useState(null);
   const [assigning, setAssigning] = useState(false);
   const [allOrders, setAllOrders] = useState([]);
   const [loading7,  setLoading7]  = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
 
-  // When switching to 7-day view, fetch all orders without date filter
+  // Multi-select state
+  const [selectedIds,   setSelectedIds]   = useState(new Set());
+  const [selectMode,    setSelectMode]    = useState(false);
+  const [bulkDeleting,  setBulkDeleting]  = useState(false);
+
   useEffect(() => {
     if (period === '7days' || period === 'all') {
       setLoading7(true);
@@ -100,6 +105,51 @@ export default function AdminOrders() {
     setAssigning(false);
   };
 
+  const handleDelete = async (orderId) => {
+    if (!window.confirm(`Delete order ${orderId}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/orders/${orderId}`, { method: 'DELETE' });
+      if (period === 'today') await fetchOrders();
+      else setAllOrders(prev => prev.filter(o => o.id !== orderId));
+      setSelected(null);
+    } catch(e) { console.error(e); }
+    setDeleting(false);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} orders? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map(id =>
+        fetch(`/api/orders/${id}`, { method: 'DELETE' })
+      ));
+      if (period === 'today') await fetchOrders();
+      else setAllOrders(prev => prev.filter(o => !selectedIds.has(o.id)));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+    } catch(e) { console.error(e); }
+    setBulkDeleting(false);
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(o => o.id)));
+    }
+  };
+
   const localDrivers = drivers.filter(d => d.role === 'local');
 
   return (
@@ -113,17 +163,41 @@ export default function AdminOrders() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { period==='today' ? fetchOrders() : null; }} className="btn btn-outline btn-sm">↻</button>
+          <button onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+            className="btn btn-sm"
+            style={{background:selectMode?'var(--tn-red)':'white', color:selectMode?'white':'var(--tn-gold)', border:'0.5px solid var(--tn-border)'}}>
+            {selectMode ? '✕ Cancel' : '☑ Select'}
+          </button>
           <span className="badge badge-info">
             {displayOrders.filter(o=>['waiting','picked','enroute'].includes(o.status)&&(o.driver||o.driver_id)).length} active
           </span>
         </div>
       </div>
 
+      {/* Bulk actions bar */}
+      {selectMode && (
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-xl" style={{background:'var(--tn-warm)'}}>
+          <button onClick={toggleSelectAll} className="btn btn-outline btn-sm text-xs">
+            {selectedIds.size === filtered.length ? '☑ Deselect all' : '☐ Select all'}
+          </button>
+          <span className="text-sm" style={{color:'var(--tn-gold)'}}>
+            {selectedIds.size} selected
+          </span>
+          {selectedIds.size > 0 && (
+            <button onClick={handleBulkDelete} disabled={bulkDeleting}
+              className="btn btn-sm ml-auto"
+              style={{background:'#991B1B', color:'white', opacity:bulkDeleting?0.6:1}}>
+              {bulkDeleting ? '⏳ Deleting...' : `🗑 Delete ${selectedIds.size}`}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Period toggle */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <div className="flex p-1 rounded-xl" style={{background:'var(--tn-warm)'}}>
           {[['today','📅 Today'],['7days','📆 Last 7 days'],['all','📂 All orders']].map(([val,label])=>(
-            <button key={val} onClick={()=>{ setPeriod(val); setTab('All'); }}
+            <button key={val} onClick={()=>{ setPeriod(val); setTab('All'); setSelectedIds(new Set()); }}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
                 background: period===val ? 'white' : 'transparent',
@@ -136,7 +210,7 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* Date range filter for All orders */}
+      {/* Date range filter */}
       {period === 'all' && (
         <div className="flex gap-2 mb-4 items-center flex-wrap">
           <div>
@@ -168,13 +242,14 @@ export default function AdminOrders() {
         <div className="text-center py-8" style={{color:'var(--tn-gold)'}}>Loading orders...</div>
       )}
 
-      {/* Desktop table */}
       {!loading7 && (
         <>
+          {/* Desktop table */}
           <div className="card overflow-hidden hidden md:block">
             <table className="w-full">
               <thead>
                 <tr style={{borderBottom:'0.5px solid var(--tn-border)'}}>
+                  {selectMode && <th className="px-4 py-3 w-10"/>}
                   {['Order ID','Client','Address','Driver','Boxes','Amount','Status','Date'].map(h => (
                     <th key={h} className="text-left text-xs font-medium px-4 py-3" style={{color:'var(--tn-gold)'}}>{h}</th>
                   ))}
@@ -184,11 +259,20 @@ export default function AdminOrders() {
                 {filtered.map((order, i) => {
                   const b = STATUS_BADGE[order.status] || STATUS_BADGE.waiting;
                   const hasDriver = order.driver || order.driver_id;
+                  const isChecked = selectedIds.has(order.id);
                   return (
                     <tr key={order.id}
-                      onClick={() => setSelected(order)}
+                      onClick={() => selectMode ? toggleSelect(order.id) : setSelected(order)}
                       className="cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{borderBottom:'0.5px solid var(--tn-border)', background:i%2===0?'white':'var(--tn-cream)'}}>
+                      style={{borderBottom:'0.5px solid var(--tn-border)', background:isChecked?'rgba(192,57,43,0.05)':i%2===0?'white':'var(--tn-cream)'}}>
+                      {selectMode && (
+                        <td className="px-4 py-3">
+                          <div className="w-5 h-5 rounded border-2 flex items-center justify-center"
+                            style={{borderColor:isChecked?'var(--tn-red)':'var(--tn-border)', background:isChecked?'var(--tn-red)':'white'}}>
+                            {isChecked && <span className="text-white text-xs">✓</span>}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3 font-mono text-xs" style={{color:'var(--tn-red)'}}>{order.id}</td>
                       <td className="px-4 py-3 text-sm font-medium">{clientName(order)}</td>
                       <td className="px-4 py-3 text-sm max-w-xs truncate" style={{color:'var(--tn-gold)'}}>{order.address}</td>
@@ -217,9 +301,18 @@ export default function AdminOrders() {
             {filtered.map(order => {
               const b = STATUS_BADGE[order.status] || STATUS_BADGE.waiting;
               const hasDriver = order.driver || order.driver_id;
+              const isChecked = selectedIds.has(order.id);
               return (
-                <div key={order.id} className="card p-4 cursor-pointer" onClick={() => setSelected(order)}>
+                <div key={order.id} className="card p-4 cursor-pointer"
+                  onClick={() => selectMode ? toggleSelect(order.id) : setSelected(order)}
+                  style={{background:isChecked?'rgba(192,57,43,0.05)':'white', border:isChecked?'1px solid var(--tn-red)':'none'}}>
                   <div className="flex items-start justify-between gap-2 mb-2">
+                    {selectMode && (
+                      <div className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{borderColor:isChecked?'var(--tn-red)':'var(--tn-border)', background:isChecked?'var(--tn-red)':'white'}}>
+                        {isChecked && <span className="text-white text-xs">✓</span>}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm">{clientName(order)}</p>
                       <p className="font-mono text-xs mt-0.5" style={{color:'var(--tn-red)'}}>{order.id}</p>
@@ -439,6 +532,10 @@ export default function AdminOrders() {
               )}
 
               <div className="flex gap-2">
+                <button onClick={() => handleDelete(selected.id)} disabled={deleting}
+                  className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
+                  {deleting ? '...' : '🗑 Delete'}
+                </button>
                 {(selected.status === 'enroute' || selected.status === 'picked') && (
                   <a href={`/track/${selected.id}`} target="_blank" rel="noreferrer"
                     className="btn flex-1 justify-center" style={{background:'#185FA5',color:'white'}}>
