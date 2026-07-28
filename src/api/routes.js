@@ -860,7 +860,7 @@ router.post('/setup/add-elaine', async (req, res) => {
 } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// Generate PDF for a local invoice - returns HTML for browser printing
+// Invoice preview — handles both local and contract
 router.get('/invoices/:id/preview', async (req, res) => {
   try {
     const { rows: invRows } = await pool.query(
@@ -870,17 +870,21 @@ router.get('/invoices/:id/preview', async (req, res) => {
     if (invRows.length === 0) return res.status(404).send('Invoice not found');
     const inv = invRows[0];
 
-    const { rows: orders } = await pool.query(`
-      SELECT o.* FROM orders o
-      LEFT JOIN clients c ON o.client_id = c.id
-      WHERE c.client_group = $1
-        AND o.status = 'delivered'
-        AND o.date >= $2 AND o.date <= $3
-      ORDER BY o.date ASC
-    `, [inv.client_group, inv.date_from, inv.date_to]);
+    let orders = [];
+    if (inv.type === 'local') {
+      const { rows } = await pool.query(`
+        SELECT o.* FROM orders o
+        LEFT JOIN clients c ON o.client_id = c.id
+        WHERE c.client_group = $1
+          AND o.status = 'delivered'
+          AND o.date >= $2 AND o.date <= $3
+        ORDER BY o.date ASC
+      `, [inv.client_group, inv.date_from, inv.date_to]);
+      orders = rows;
+    }
 
     const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    const html = generateInvoiceHTML(inv, orders, inv.client_group);
+    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id);
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch(err) {
@@ -896,16 +900,20 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
     );
     if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
     const inv = invRows[0];
-    const { rows: orders } = await pool.query(`
-      SELECT o.* FROM orders o
-      LEFT JOIN clients c ON o.client_id = c.id
-      WHERE c.client_group = $1
-        AND o.status = 'delivered'
-        AND o.date >= $2 AND o.date <= $3
-      ORDER BY o.date ASC
-    `, [inv.client_group, inv.date_from, inv.date_to]);
+    let orders = [];
+    if (inv.type === 'local') {
+      const { rows } = await pool.query(`
+        SELECT o.* FROM orders o
+        LEFT JOIN clients c ON o.client_id = c.id
+        WHERE c.client_group = $1
+          AND o.status = 'delivered'
+          AND o.date >= $2 AND o.date <= $3
+        ORDER BY o.date ASC
+      `, [inv.client_group, inv.date_from, inv.date_to]);
+      orders = rows;
+    }
     const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    const html = generateInvoiceHTML(inv, orders, inv.client_group);
+    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id);
     const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
       method: 'POST',
       headers: {
