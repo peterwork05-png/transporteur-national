@@ -52,3 +52,4 @@ function isDST(date) {
   const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
   return Math.max(jan, jul) !== date.getTimezoneOffset();
 }
+
