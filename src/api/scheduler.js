@@ -1,5 +1,6 @@
 import { checkGmailRemittances } from './gmail.js';
 import { generateLocalInvoices, getInvoicePeriods } from './autoInvoice.js';
+import { generateContractInvoices, getPreviousWeekDates } from './contractInvoice.js';
 
 export function startScheduler() {
   console.log('📅 Scheduler started');
@@ -21,16 +22,26 @@ export function startScheduler() {
       } catch(err) { console.error('❌ Auto-scan error:', err.message); }
     }
 
-    // Auto-invoice — 15th and last day of month at noon ET
+    // Local invoices — 15th and last day of month at noon ET
     const lastDayOfMonth = new Date(now.getFullYear(), now.getUTCMonth() + 1, 0).getDate();
     if (etHour === 12 && isTopOfHour && (etDate === 15 || etDate === lastDayOfMonth)) {
       const { period1, period2 } = getInvoicePeriods(now);
       const period = etDate === 15 ? period1 : period2;
-      console.log(`📄 Auto-invoice triggered for ${period.from} – ${period.to}`);
+      console.log(`📄 Auto local invoice triggered for ${period.from} – ${period.to}`);
       try {
         const results = await generateLocalInvoices(period.from, period.to);
-        console.log(`✅ Auto-invoice: ${results.invoices?.length || 0} invoices created`);
-      } catch(err) { console.error('❌ Auto-invoice error:', err.message); }
+        console.log(`✅ Local invoices: ${results.invoices?.length || 0} created`);
+      } catch(err) { console.error('❌ Local invoice error:', err.message); }
+    }
+
+    // Contract invoices — every Sunday at noon ET
+    if (etDay === 0 && etHour === 12 && isTopOfHour) {
+      const { from, to } = getPreviousWeekDates(now);
+      console.log(`📄 Auto contract invoice triggered for ${from} – ${to}`);
+      try {
+        const results = await generateContractInvoices(from, to, 5);
+        console.log(`✅ Contract invoices: ${results.invoices?.length || 0} created`);
+      } catch(err) { console.error('❌ Contract invoice error:', err.message); }
     }
 
   }, 5 * 60 * 1000);
