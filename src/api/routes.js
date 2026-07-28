@@ -931,7 +931,8 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
   } catch(err) {
     console.error('Generate PDF error:', err);
     res.status(500).json({ error: err.message });
- });
+  }
+});
 
 // Delete invoice
 router.delete('/invoices/:id', async (req, res) => {
