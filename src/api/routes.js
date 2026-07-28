@@ -208,6 +208,11 @@ router.patch('/orders/:id/assign', async (req, res) => {
       WHERE id = $2 RETURNING *
     `, [driver_id, req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    // Notify driver of new assignment
+try {
+  const { sendNotification } = await import('./pushNotifications.js');
+  await sendNotification('driver', driver_id, '📦 New order assigned', rows[0].address || 'New delivery', { url: '/driver/local' });
+} catch(e) {}
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -365,6 +370,11 @@ router.post('/webhook/woocommerce', async (req, res) => {
         toDropoffDate, fromPickupDate]);
 
     console.log(`✅ Order: ${orderId} | To: ${toAssociateName} at ${address} | Store: ${storeNumber} | PO: ${poNumber}`);
+    // Notify admins of new order
+try {
+  const { notifyAdmins } = await import('./pushNotifications.js');
+  await notifyAdmins('📦 New order received', `${orderId} · ${address}`, { url: '/admin' });
+} catch(e) {}
     res.json({ success: true, order_id: orderId, client_id: clientId, to: address, store: storeNumber });
   } catch (err) {
     console.error('❌ Webhook error:', err);
@@ -960,7 +970,25 @@ router.get('/orders/:id/proof-pdf', async (req, res) => {
     res.status(500).send('Error: ' + err.message);
   }
 });
+// Push notification subscription
+router.post('/push/subscribe', async (req, res) => {
+  try {
+    const { subscription, userType, userId } = req.body;
+    const { saveSubscription } = await import('./pushNotifications.js');
+    await saveSubscription(subscription, userType, userId);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
+// Send test notification
+router.post('/push/test', async (req, res) => {
+  try {
+    const { userType, userId } = req.body;
+    const { sendNotification } = await import('./pushNotifications.js');
+    await sendNotification(userType, userId, '🔔 Test notification', 'Push notifications are working!');
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;
 
