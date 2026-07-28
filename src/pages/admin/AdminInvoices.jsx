@@ -16,6 +16,46 @@ export default function AdminInvoices() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const fileRef = useRef(null);
 
+  // Generate invoices modal
+  const [showGenerate,  setShowGenerate]  = useState(false);
+  const [genDateFrom,   setGenDateFrom]   = useState('');
+  const [genDateTo,     setGenDateTo]     = useState('');
+  const [generating,    setGenerating]    = useState(false);
+  const [genResult,     setGenResult]     = useState(null);
+
+  const handleGenerateInvoices = async () => {
+    if (!genDateFrom || !genDateTo) return;
+    setGenerating(true);
+    setGenResult(null);
+    try {
+      const res  = await fetch('/api/invoices/generate-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo }),
+      });
+      const data = await res.json();
+      setGenResult(data);
+      if (data.success) await fetchInvoices();
+    } catch(e) { setGenResult({ success: false, error: e.message }); }
+    setGenerating(false);
+  };
+
+  // Quick period helpers
+  const setCurrentPeriod = () => {
+    const today = new Date();
+    const day   = today.getDate();
+    const year  = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
+    if (day <= 15) {
+      setGenDateFrom(`${year}-${month}-01`);
+      setGenDateTo(`${year}-${month}-15`);
+    } else {
+      setGenDateFrom(`${year}-${month}-16`);
+      setGenDateTo(`${year}-${month}-${lastDay}`);
+    }
+  };
+
   const [form, setForm] = useState({
     invNum: '', type:'contract', route:'ontario', client:'beg',
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
@@ -86,25 +126,9 @@ export default function AdminInvoices() {
     } catch(e) { console.error(e); }
   };
 
-const handleGeneratePDF = async () => {
-  setUploading(true);
-  setUploadMsg('Generating PDF...');
-  try {
-    const res  = await fetch(`/api/invoices/${selected.id}/generate-pdf`, { method:'POST' });
-    const data = await res.json();
-    if (data.success) {
-      setUploadMsg('✅ PDF generated!');
-      await fetchInvoices();
-      setSelected(prev => prev ? { ...prev, pdf_url: data.pdf_url } : null);
-    } else { setUploadMsg(`❌ ${data.error}`); }
-  } catch(e) { setUploadMsg(`❌ ${e.message}`); }
-  setUploading(false);
-  setTimeout(() => setUploadMsg(''), 4000);
-};
-
-const handlePreview = () => {
-  window.open(`/api/invoices/${selected.id}/preview`, '_blank');
-};
+  const handleGeneratePDF = () => {
+    window.open(`/api/invoices/${selected.id}/preview`, '_blank');
+  };
 
   const handlePDFUpload = async (invoiceId, file) => {
     setUploading(true);
@@ -137,7 +161,13 @@ const handlePreview = () => {
           <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Invoices</h1>
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Manage and upload invoice PDFs</p>
         </div>
+      <div className="flex items-center gap-2">
+        <button onClick={() => { setShowGenerate(true); setGenResult(null); setCurrentPeriod(); }}
+          className="btn btn-sm" style={{background:'var(--tn-gold)',color:'white'}}>
+          ⚡ Generate
+        </button>
         <button onClick={() => setShowNew(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ New</button>
+      </div>
       </div>
 
       {/* Tabs */}
@@ -336,14 +366,10 @@ const handlePreview = () => {
                       </a>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={handleGeneratePDF} disabled={uploading}
-  className="btn btn-outline btn-sm flex-1 justify-center text-xs">
-  {uploading ? '⏳...' : '🔄 Regenerate PDF'}
-</button>
-<button onClick={handlePreview}
-  className="btn btn-outline btn-sm flex-1 justify-center text-xs">
-  👁 Preview
-</button>
+                      <button onClick={handleGeneratePDF}
+                        className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+                        🔄 Preview & Print PDF
+                      </button>
                       <button onClick={() => fileRef.current?.click()}
                         className="btn btn-outline btn-sm flex-1 justify-center text-xs">
                         📤 Upload PDF
@@ -354,17 +380,11 @@ const handlePreview = () => {
                   <div className="space-y-2">
                     {/* Generate PDF button for auto-generated invoices */}
                     {selected.type === 'local' && (
-                      <div className="space-y-1">
-  <button onClick={handleGeneratePDF} disabled={uploading}
-    className="btn w-full justify-center"
-    style={{background:'var(--tn-red)', color:'white', opacity:uploading?0.6:1}}>
-    {uploading ? '⏳ Generating...' : '✨ Generate PDF'}
-  </button>
-  <button onClick={handlePreview}
-    className="btn btn-outline w-full justify-center text-xs">
-    👁 Preview HTML
-  </button>
-</div>
+                      <button onClick={handleGeneratePDF}
+                        className="btn w-full justify-center"
+                        style={{background:'var(--tn-red)', color:'white'}}>
+                        ✨ Preview & Print PDF
+                      </button>
                     )}
                     <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
                       style={{borderColor:'var(--tn-border-strong)'}}
@@ -401,6 +421,73 @@ const handlePreview = () => {
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generate invoices modal */}
+      {showGenerate && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{background:'var(--tn-cream)'}}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-lg">⚡ Generate local invoices</h2>
+              <button onClick={() => setShowGenerate(false)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
+            </div>
+            <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>
+              Automatically creates invoices for all local clients (Bureau en Gros, Jonarts, A&E Bath) based on delivered orders in the selected period.
+            </p>
+            <div className="space-y-3">
+              <div className="flex gap-2 mb-1">
+                <button onClick={setCurrentPeriod}
+                  className="btn btn-outline btn-sm text-xs">
+                  Current period
+                </button>
+              </div>
+              <div>
+                <label className="label">From</label>
+                <input type="date" className="input" value={genDateFrom} onChange={e=>setGenDateFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">To</label>
+                <input type="date" className="input" value={genDateTo} onChange={e=>setGenDateTo(e.target.value)} />
+              </div>
+            </div>
+
+            {genResult && (
+              <div className="mt-4 rounded-xl p-3" style={{background: genResult.success ? '#E8F5EF' : '#FEE2E2'}}>
+                {genResult.success ? (
+                  <>
+                    <p className="text-sm font-medium" style={{color:'#0F6E56'}}>
+                      ✅ {genResult.invoices?.length || 0} invoice{genResult.invoices?.length !== 1 ? 's' : ''} generated!
+                    </p>
+                    {genResult.invoices?.map((inv, i) => (
+                      <p key={i} className="text-xs mt-1" style={{color:'#0F6E56'}}>
+                        #{inv.invoiceId} — {inv.clientName} — ${inv.total}
+                      </p>
+                    ))}
+                    {genResult.invoices?.length === 0 && (
+                      <p className="text-xs mt-1" style={{color:'#0F6E56'}}>No delivered orders found for this period.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm" style={{color:'#991B1B'}}>❌ {genResult.error}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowGenerate(false)} className="btn btn-outline flex-1 justify-center">
+                {genResult?.success ? 'Close' : 'Cancel'}
+              </button>
+              {!genResult?.success && (
+                <button onClick={handleGenerateInvoices}
+                  disabled={generating || !genDateFrom || !genDateTo}
+                  className="btn flex-1 justify-center"
+                  style={{background:'var(--tn-red)', color:'white', opacity:generating||!genDateFrom||!genDateTo?0.6:1}}>
+                  {generating ? '⏳ Generating...' : '⚡ Generate'}
+                </button>
+              )}
             </div>
           </div>
         </div>
