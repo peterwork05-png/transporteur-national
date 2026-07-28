@@ -3,14 +3,12 @@ import pool from '../db/index.js';
 const TPS = 0.05;
 const TVQ = 0.09975;
 
-// Generate local invoices for a given period
 export async function generateLocalInvoices(dateFrom, dateTo, clientGroup) {
   try {
     console.log(`📄 Generating local invoices from ${dateFrom} to ${dateTo}`);
 
-    // Get all client groups to process - use DISTINCT to avoid duplicates
     const cgQuery = clientGroup
-      ? `SELECT DISTINCT ON (c.client_group) c.client_group, c.name, c.id FROM clients c WHERE c.client_group = $1 AND c.role = 'ops' AND c.active = true LIMIT 1`
+      ? `SELECT DISTINCT ON (c.client_group) c.client_group, c.name, c.id FROM clients c WHERE c.client_group = $1 AND c.role = 'ops' AND c.active = true`
       : `SELECT DISTINCT ON (c.client_group) c.client_group, c.name, c.id FROM clients c WHERE c.role = 'ops' AND c.active = true AND c.client_group IS NOT NULL ORDER BY c.client_group, c.id`;
 
     const cgParams = clientGroup ? [clientGroup] : [];
@@ -37,11 +35,15 @@ export async function generateLocalInvoices(dateFrom, dateTo, clientGroup) {
       const tvq   = subtotal * TVQ;
       const total = subtotal + tps + tvq;
 
+      // Get next invoice number continuing from highest existing
+      const { rows: lastInv } = await pool.query(`SELECT MAX(id) as last_id FROM invoices`);
+      const nextId = (parseInt(lastInv[0].last_id) || 599) + 1;
+
       const { rows: inv } = await pool.query(`
-        INSERT INTO invoices (client_id, type, date_from, date_to, subtotal, tps, tvq, total, status)
-        VALUES ($1, 'local', $2, $3, $4, $5, $6, $7, 'pending')
+        INSERT INTO invoices (id, client_id, type, date_from, date_to, subtotal, tps, tvq, total, status)
+        VALUES ($1, $2, 'local', $3, $4, $5, $6, $7, $8, 'pending')
         RETURNING id
-      `, [clientId, dateFrom, dateTo,
+      `, [nextId, clientId, dateFrom, dateTo,
           subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2)]);
 
       results.push({
