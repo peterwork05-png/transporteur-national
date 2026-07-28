@@ -941,8 +941,8 @@ router.delete('/invoices/:id', async (req, res) => {
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
-// Generate proof of delivery PDF
-router.post('/orders/:id/proof-pdf', async (req, res) => {
+// Proof of delivery — HTML preview for browser printing
+router.get('/orders/:id/proof-pdf', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT o.*, d.name as driver_name
@@ -950,20 +950,16 @@ router.post('/orders/:id/proof-pdf', async (req, res) => {
       LEFT JOIN drivers d ON o.driver_id = d.id
       WHERE o.id = $1
     `, [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (rows.length === 0) return res.status(404).send('Order not found');
     const order = rows[0];
-
     const { generateProofHTML } = await import('./generateProofPDF.js');
     const html = generateProofHTML(order);
-
-    const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${Buffer.from(`api:${process.env.PDFSHIFT_API_KEY}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ source: html, landscape: false, use_print: false }),
-    });
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch(err) {
+    res.status(500).send('Error: ' + err.message);
+  }
+});
 
     if (!pdfRes.ok) throw new Error(`PDFShift error: ${await pdfRes.text()}`);
     const pdfBuffer = await pdfRes.arrayBuffer();
