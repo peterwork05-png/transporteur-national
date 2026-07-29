@@ -1023,6 +1023,91 @@ router.post('/invoices/generate-contract', async (req, res) => {
     res.json(results);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Send invoice by email to client
+router.post('/invoices/:id/send-email', async (req, res) => {
+  try {
+    const { rows: invRows } = await pool.query(`
+      SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group, c.name as client_name
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.id = $1
+    `, [req.params.id]);
+    if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+    if (!inv.pdf_url) return res.status(400).json({ error: 'No PDF generated yet. Generate PDF first.' });
+
+    // Get finance contacts for this client
+    const { rows: contacts } = await pool.query(`
+      SELECT email FROM clients
+      WHERE client_group = (SELECT client_group FROM clients WHERE id = $1 LIMIT 1)
+      AND role = 'finance' AND active = true
+    `, [inv.client_id]);
+
+    if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found for this client' });
+    const toEmails = contacts.map(c => c.email);
+
+    const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
+    const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
+    const total    = `$${parseFloat(inv.total||0).toLocaleString('en-CA', {minimumFractionDigits:2})}`;
+    const typeLabel = inv.type === 'contract' ? `Contrat · Route ${inv.route}` : 'Livraisons locales';
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#1A1208;padding:20px;text-align:center;border-radius:12px 12px 0 0">
+          <h1 style="color:#FAF7F0;margin:0;font-size:20px">🦅 Transporteur National MC INC.</h1>
+        </div>
+        <div style="padding:30px;background:#FAF7F0">
+          <p style="color:#1A1208">Bonjour / Hello,</p>
+          <p style="color:#1A1208">Veuillez trouver ci-joint votre facture. / Please find your invoice below.</p>
+          <div style="background:white;border-radius:12px;padding:20px;margin:20px 0;border:1px solid #e0d9cc">
+            <table style="width:100%;border-collapse:collapse">
+              <tr><td style="color:#8B6914;font-size:12px;padding:4px 0">Facture / Invoice #</td><td style="font-weight:bold;padding:4px 0">#${inv.id}</td></tr>
+              <tr><td style="color:#8B6914;font-size:12px;padding:4px 0">Type</td><td style="padding:4px 0">${typeLabel}</td></tr>
+              <tr><td style="color:#8B6914;font-size:12px;padding:4px 0">Période / Period</td><td style="padding:4px 0">${dateFrom} – ${dateTo}</td></tr>
+              <tr style="border-top:1px solid #e0d9cc">
+                <td style="color:#8B6914;font-size:12px;padding:8px 0 4px;font-weight:bold">TOTAL</td>
+                <td style="padding:8px 0 4px;font-weight:bold;font-size:18px;color:#C0392B">${total}</td>
+              </tr>
+            </table>
+          </div>
+          <p style="color:#1A1208">📄 <a href="${inv.pdf_url}" style="color:#C0392B">Télécharger la facture PDF / Download Invoice PDF</a></p>
+          <p style="color:#1A1208;margin-top:16px">Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
+          <div style="background:white;border-radius:8px;padding:12px;margin:10px 0;border:1px solid #e0d9cc">
+            <p style="margin:0;color:#1A1208"><strong>Transporteur National MC INC.</strong></p>
+            <p style="margin:4px 0;color:#8B6914;font-size:13px">TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+          </div>
+          <p style="color:#1A1208">Merci / Thank you,<br><strong>Transporteur National MC INC.</strong><br>📧 transporteurnationalmc@gmail.com</p>
+        </div>
+        <div style="background:#1A1208;padding:12px;text-align:center;border-radius:0 0 12px 12px">
+          <p style="color:rgba(250,247,240,0.4);font-size:11px;margin:0">MERCI DE VOTRE CONFIANCE!</p>
+        </div>
+      </div>
+    `;
+
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Transporteur National MC <onboarding@resend.dev>',
+        to: toEmails,
+        subject: `Facture #${inv.id} — Transporteur National MC INC.`,
+        html,
+      }),
+    });
+
+    const resendData = await resendRes.json();
+    if (!resendRes.ok) throw new Error(resendData?.message || JSON.stringify(resendData));
+
+    console.log(`📧 Invoice #${inv.id} sent to ${toEmails.join(', ')}`);
+    res.json({ success: true, sentTo: toEmails.join(', ') });
+  } catch(err) {
+    console.error('Send invoice email error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;
 
