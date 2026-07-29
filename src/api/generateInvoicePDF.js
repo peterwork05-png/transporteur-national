@@ -9,8 +9,8 @@ const CLIENT_INFO = {
 
 export function generateInvoiceHTML(invoice, orders, clientGroup) {
   const client   = CLIENT_INFO[clientGroup] || { name: clientGroup.toUpperCase(), address: '' };
-  const dateFrom = invoice.date_from ? new Date(invoice.date_from).toLocaleDateString('fr-CA') : '';
-  const dateTo   = invoice.date_to   ? new Date(invoice.date_to).toLocaleDateString('fr-CA')   : '';
+  const dateFrom = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
+  const dateTo   = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
   const fmt      = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
 
   const orderRows = orders.map(o => `
