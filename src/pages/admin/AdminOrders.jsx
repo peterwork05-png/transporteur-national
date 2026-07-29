@@ -528,6 +528,42 @@ export default function AdminOrders() {
                       ))}
                     </div>
                   )}
+                  {/* Upload proof */}
+                  <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                    <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>📤 Upload proof of delivery</p>
+                    <input type="file" accept="image/*" id="proof-upload" className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (ev) => {
+                          const base64 = ev.target.result.split(',')[1];
+                          try {
+                            const res = await fetch(`/api/upload/delivery-photo`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ imageBase64: base64, orderId: selected.id }),
+                            });
+                            const data = await res.json();
+                            if (data.url) {
+                              await fetch(`/api/orders/${selected.id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 'delivered', photo_url: data.url }),
+                              });
+                              setSelected(prev => ({ ...prev, photo_url: data.url }));
+                              if (period === 'today') fetchOrders();
+                            }
+                          } catch(err) { console.error(err); }
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <label htmlFor="proof-upload" className="btn btn-outline btn-sm w-full justify-center cursor-pointer text-xs">
+                      📷 {selected.photo_url ? 'Replace photo proof' : 'Upload photo proof'}
+                    </label>
+                  </div>
                 </div>
               )}
 
