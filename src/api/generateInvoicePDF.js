@@ -1,26 +1,39 @@
-// Invoice PDF generator using HTML template uploaded to Cloudinary as raw
-// Called from routes.js to generate and upload invoice PDFs
-
 const CLIENT_INFO = {
-  beg:    { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
-  jonarts:{ name: 'JONARTS PRINTING',     address: '9010 Ave du Parc\nMontréal, QC H2N 1Y8\n1(514) 738-8224 ext 122' },
-  aebath: { name: 'A&E BATH AND SHOWER',  address: '' },
+  beg:     { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
+  beg_ops: { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
+  jonarts: { name: 'JONARTS PRINTING',     address: '9010 Ave du Parc\nMontréal, QC H2N 1Y8\n1(514) 738-8224 ext 122' },
+  aebath:  { name: 'A&E BATH AND SHOWER',  address: '' },
+};
+
+const ROUTE_LABELS = {
+  ontario: 'Ontario / Gatineau',
+  quebec:  'Québec',
 };
 
 export function generateInvoiceHTML(invoice, orders, clientGroup) {
-  const client   = CLIENT_INFO[clientGroup] || { name: clientGroup.toUpperCase(), address: '' };
-  const dateFrom = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
-  const dateTo   = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
-  const fmt      = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+  const client     = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: (clientGroup||'').toUpperCase(), address: '' };
+  const dateFrom   = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
+  const dateTo     = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
+  const fmt        = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+  const isContract = invoice.type === 'contract';
 
-  const orderRows = orders.map(o => `
+  const tableRows = isContract ? `
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${o.date ? new Date(o.date).toLocaleDateString('fr-CA') : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${invoice.days || 5} jours / days</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${invoice.days || 5}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(invoice.subtotal)}</td>
+    </tr>
+  ` : (orders || []).map(o => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${o.date ? new Date(o.date).toISOString().split('T')[0] : ''}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${o.address || ''}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${o.boxes || 1}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(o.amount)}</td>
     </tr>
   `).join('');
+
+  const colHeader = isContract ? 'Jours / Days' : 'Boîtes';
 
   return `<!DOCTYPE html>
 <html>
@@ -35,7 +48,6 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
 <body>
 <div class="page">
 
-  <!-- Header -->
   <table width="100%" style="margin-bottom:40px">
     <tr>
       <td style="vertical-align:top">
@@ -53,38 +65,35 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
         <div style="font-size:22px;font-weight:bold;color:#C0392B">FACTURE</div>
         <div style="font-size:14px;font-weight:bold;margin-top:8px">No. ${invoice.id}</div>
         <div style="font-size:12px;color:#666;margin-top:4px">${dateFrom} – ${dateTo}</div>
+        ${isContract ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">Route ${ROUTE_LABELS[invoice.route] || invoice.route}</div>` : ''}
         <div style="font-size:11px;color:#666;margin-top:4px">TPS: 784789315RT0001</div>
         <div style="font-size:11px;color:#666">TVQ: 1224260784TQ0001</div>
       </td>
     </tr>
   </table>
 
-  <!-- Divider -->
   <div style="height:2px;background:#1A1208;margin-bottom:30px"></div>
 
-  <!-- Bill To -->
   <div style="margin-bottom:30px">
     <div style="font-size:11px;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Facturer à / Bill To</div>
     <div style="font-size:14px;font-weight:bold">${client.name}</div>
     ${client.address ? `<div style="font-size:12px;color:#444;margin-top:4px;line-height:1.8;white-space:pre-line">${client.address}</div>` : ''}
   </div>
 
-  <!-- Orders Table -->
   <table width="100%" style="border-collapse:collapse;margin-bottom:30px">
     <thead>
       <tr style="background:#1A1208;color:white">
         <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600">Date</th>
-        <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600">Description / Adresse</th>
-        <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600">Boîtes</th>
+        <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600">Description</th>
+        <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600">${colHeader}</th>
         <th style="padding:10px 12px;text-align:right;font-size:12px;font-weight:600">Montant</th>
       </tr>
     </thead>
     <tbody>
-      ${orderRows}
+      ${tableRows}
     </tbody>
   </table>
 
-  <!-- Totals -->
   <table style="margin-left:auto;min-width:280px">
     <tr>
       <td style="padding:6px 12px;font-size:12px;color:#666">Sous-total / Subtotal</td>
@@ -104,7 +113,6 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
     </tr>
   </table>
 
-  <!-- Footer -->
   <div style="margin-top:60px;padding-top:20px;border-top:1px solid #e0d9cc;text-align:center">
     <div style="font-size:14px;font-weight:bold;color:#8B6914;letter-spacing:2px">MERCI DE VOTRE CONFIANCE</div>
     <div style="font-size:11px;color:#999;margin-top:8px">Payable par virement électronique (EFT)</div>
