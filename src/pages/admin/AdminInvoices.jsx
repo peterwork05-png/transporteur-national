@@ -14,6 +14,8 @@ export default function AdminInvoices() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [deleting,  setDeleting]  = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailMsg,     setEmailMsg]     = useState('');
   const fileRef = useRef(null);
 
   // Generate invoices modal
@@ -114,7 +116,18 @@ export default function AdminInvoices() {
     setDeleting(false);
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const handleSendEmail = async () => {
+    setSendingEmail(true);
+    setEmailMsg('');
+    try {
+      const res  = await fetch(`/api/invoices/${selected.id}/send-email`, { method:'POST' });
+      const data = await res.json();
+      if (data.success) setEmailMsg(`✅ Sent to ${data.sentTo}`);
+      else setEmailMsg(`❌ ${data.error}`);
+    } catch(e) { setEmailMsg(`❌ ${e.message}`); }
+    setSendingEmail(false);
+    setTimeout(() => setEmailMsg(''), 5000);
+  };
     setUpdatingStatus(true);
     try {
       if (newStatus === 'paid') {
@@ -447,19 +460,31 @@ export default function AdminInvoices() {
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={handleDelete} disabled={deleting}
                   className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
                   {deleting ? '...' : '🗑 Delete'}
                 </button>
                 <button onClick={() => setSelected(null)} className="btn btn-outline flex-1 justify-center">Close</button>
                 {selected.pdf_url && (
-                  <a href={selected.pdf_url} target="_blank" rel="noreferrer"
-                    className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                    ⬇ PDF
-                  </a>
+                  <>
+                    <button onClick={handleSendEmail} disabled={sendingEmail}
+                      className="btn flex-1 justify-center"
+                      style={{background:'#0F6E56', color:'white', opacity:sendingEmail?0.6:1}}>
+                      {sendingEmail ? '⏳ Sending...' : '📧 Send to client'}
+                    </button>
+                    <a href={selected.pdf_url} target="_blank" rel="noreferrer"
+                      className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                      ⬇ PDF
+                    </a>
+                  </>
                 )}
               </div>
+              {emailMsg && (
+                <p className="text-xs mt-2 text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>
+                  {emailMsg}
+                </p>
+              )}
             </div>
           </div>
         </div>
