@@ -118,13 +118,23 @@ export default function AdminInvoices() {
 
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [emailPreviewData, setEmailPreviewData] = useState(null);
+  const [editEmailTo,      setEditEmailTo]      = useState('');
+  const [editEmailSubject, setEditEmailSubject] = useState('');
+  const [editEmailNote,    setEditEmailNote]    = useState('');
+  const [showEmailBody,    setShowEmailBody]    = useState(false);
 
   const handlePreviewEmail = async () => {
     try {
       const res  = await fetch(`/api/invoices/${selected.id}/email-preview`);
       const data = await res.json();
-      if (data.success) { setEmailPreviewData(data); setShowEmailPreview(true); }
-      else setEmailMsg(`❌ ${data.error}`);
+      if (data.success) {
+        setEmailPreviewData(data);
+        setEditEmailTo(data.to);
+        setEditEmailSubject(data.subject);
+        setEditEmailNote('');
+        setShowEmailBody(false);
+        setShowEmailPreview(true);
+      } else setEmailMsg(`❌ ${data.error}`);
     } catch(e) { setEmailMsg(`❌ ${e.message}`); }
   };
 
@@ -132,7 +142,11 @@ export default function AdminInvoices() {
     setSendingEmail(true);
     setEmailMsg('');
     try {
-      const res  = await fetch(`/api/invoices/${selected.id}/send-email`, { method:'POST' });
+      const res  = await fetch(`/api/invoices/${selected.id}/send-email`, {
+        method:'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: editEmailTo, subject: editEmailSubject, note: editEmailNote }),
+      });
       const data = await res.json();
       if (data.success) { setEmailMsg(`✅ Sent to ${data.sentTo}`); setShowEmailPreview(false); }
       else setEmailMsg(`❌ ${data.error}`);
@@ -509,20 +523,28 @@ export default function AdminInvoices() {
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
             <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
-              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>📧 Email preview</p>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>📧 Email preview & edit</p>
               <button onClick={() => setShowEmailPreview(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
             </div>
             <div className="p-5 space-y-4">
-              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>To</p>
-                <p className="text-sm font-medium">{emailPreviewData.to}</p>
+
+              {/* Editable To */}
+              <div>
+                <label className="label">To (edit to add/remove recipients)</label>
+                <input className="input" value={editEmailTo} onChange={e=>setEditEmailTo(e.target.value)}
+                  placeholder="email@company.com, email2@company.com" />
+                <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Separate multiple emails with commas</p>
               </div>
-              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Subject</p>
-                <p className="text-sm font-medium">{emailPreviewData.subject}</p>
+
+              {/* Editable Subject */}
+              <div>
+                <label className="label">Subject</label>
+                <input className="input" value={editEmailSubject} onChange={e=>setEditEmailSubject(e.target.value)} />
               </div>
+
+              {/* Invoice summary */}
               <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                <p className="text-xs mb-2 font-medium" style={{color:'var(--tn-gold)'}}>Invoice details</p>
+                <p className="text-xs mb-2 font-medium" style={{color:'var(--tn-gold)'}}>Invoice details (auto-included)</p>
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span style={{color:'var(--tn-gold)'}}>Invoice #</span>
@@ -542,20 +564,63 @@ export default function AdminInvoices() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
-                <span>📄</span>
-                <p className="text-sm" style={{color:'#0F6E56'}}>PDF download link will be included</p>
+
+              {/* Personal note */}
+              <div>
+                <label className="label">Personal note (optional)</label>
+                <textarea className="input" rows={3}
+                  placeholder="Add a personal message..."
+                  value={editEmailNote} onChange={e=>setEditEmailNote(e.target.value)}
+                  style={{resize:'none', minHeight:'80px'}} />
+                <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Appears at the top of the email</p>
               </div>
+
+              {/* Full email body preview */}
+              <div className="rounded-xl overflow-hidden" style={{border:'0.5px solid var(--tn-border)'}}>
+                <button onClick={() => setShowEmailBody(p => !p)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+                  style={{background:'var(--tn-warm)'}}>
+                  <span>👁 Preview full email</span>
+                  <span style={{color:'var(--tn-gold)'}}>{showEmailBody ? '▲ Hide' : '▼ Show'}</span>
+                </button>
+                {showEmailBody && (
+                  <div className="p-4 text-xs space-y-2" style={{background:'white', color:'#1A1208', lineHeight:'1.6'}}>
+                    {editEmailNote && (
+                      <div style={{background:'#FEF3C7',borderRadius:'6px',padding:'8px',border:'1px solid #D97706',marginBottom:'8px'}}>
+                        <p style={{color:'#92400E',margin:0}}>{editEmailNote}</p>
+                      </div>
+                    )}
+                    <p>Bonjour / Hello,</p>
+                    <p>Veuillez trouver ci-joint votre facture. / Please find your invoice below.</p>
+                    <div style={{background:'#FAF7F0',borderRadius:'8px',padding:'12px',border:'1px solid #e0d9cc',margin:'8px 0'}}>
+                      <p style={{margin:'2px 0'}}><strong>Invoice #:</strong> #{emailPreviewData.invoiceId}</p>
+                      <p style={{margin:'2px 0'}}><strong>Period:</strong> {emailPreviewData.dateFrom} – {emailPreviewData.dateTo}</p>
+                      <p style={{margin:'2px 0'}}><strong>Type:</strong> {emailPreviewData.type}</p>
+                      <p style={{margin:'8px 0 2px',fontWeight:'bold',color:'#C0392B',fontSize:'14px'}}><strong>TOTAL: {emailPreviewData.total}</strong></p>
+                    </div>
+                    <p>📄 <span style={{color:'#C0392B'}}>PDF invoice download link will be included</span></p>
+                    <p>Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
+                    <div style={{background:'#FAF7F0',borderRadius:'6px',padding:'8px',border:'1px solid #e0d9cc'}}>
+                      <p style={{margin:0}}><strong>Transporteur National MC INC.</strong></p>
+                      <p style={{margin:'2px 0',color:'#8B6914'}}>TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+                    </div>
+                    <p>Merci / Thank you,<br/><strong>Transporteur National MC INC.</strong><br/>📧 transporteurnationalmc@gmail.com</p>
+                  </div>
+                )}
+              </div>
+
               <div className="rounded-xl p-3" style={{background:'#EFF6FF'}}>
-                <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Email is sent in both French and English</p>
+                <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Email sent in both French and English</p>
               </div>
+
               {emailMsg && (
                 <p className="text-xs text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{emailMsg}</p>
               )}
+
               <div className="flex gap-2">
                 <button onClick={() => setShowEmailPreview(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
-                <button onClick={handleSendEmail} disabled={sendingEmail}
-                  className="btn flex-1 justify-center" style={{background:'#0F6E56',color:'white',opacity:sendingEmail?0.7:1}}>
+                <button onClick={handleSendEmail} disabled={sendingEmail || !editEmailTo}
+                  className="btn flex-1 justify-center" style={{background:'#0F6E56',color:'white',opacity:sendingEmail||!editEmailTo?0.7:1}}>
                   {sendingEmail ? '⏳ Sending...' : '📧 Send now'}
                 </button>
               </div>
