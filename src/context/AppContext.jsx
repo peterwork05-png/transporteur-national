@@ -14,7 +14,6 @@ export function AppProvider({ children }) {
   const [ontarioRoute, setOntarioRouteState] = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(15).fill(null), arrivals: new Array(15).fill(null) });
   const [quebecRoute,  setQuebecRouteState]  = useState({ started: false, done: false, holiday: false, startTime: null, stopStatus: new Array(10).fill(null), arrivals: new Array(10).fill(null) });
 
-  // Save route to DB whenever it changes
   const saveRoute = useCallback(async (routeName, routeData) => {
     try {
       await fetch(`${API}/routes/${routeName}/progress`, {
@@ -41,7 +40,6 @@ export function AppProvider({ children }) {
     });
   }, [saveRoute]);
 
-  // Load today's route progress on startup
   const fetchRoutes = useCallback(async () => {
     try {
       const res  = await fetch(`${API}/routes/progress`);
@@ -120,7 +118,6 @@ export function AppProvider({ children }) {
     fetchInvoices();
     fetchRoutes();
 
-    // Auto-refresh orders every 10 seconds to catch new WooCommerce orders
     const iv = setInterval(() => fetchOrders(), 10000);
     return () => clearInterval(iv);
   }, []);
@@ -159,31 +156,25 @@ export function AppProvider({ children }) {
   }, []);
 
   const addInvoice = useCallback(async (inv) => {
-  try {
-    const subtotal = inv.subtotal || (inv.amount / 1.14975);
-    const res = await fetch(`${API}/invoices`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id:        inv.id || undefined,
-        type:      inv.type,
-        client_id: inv.client,
-        route:     inv.route,
-        date_from: inv.date_from || inv.dateFrom,
-        date_to:   inv.date_to   || inv.dateTo,
-        days:      inv.days,
-        subtotal:  subtotal.toFixed(2),
-        tps:       (subtotal * 0.05).toFixed(2),
-        tvq:       (subtotal * 0.09975).toFixed(2),
-        total:     inv.amount,
-      }),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      setInvoices(prev => [{ ...inv, id: saved.id }, ...prev]);
-    }
-  } catch (err) { setInvoices(prev => [inv, ...prev]); }
-}, []);
+    try {
+      const subtotal = inv.subtotal || (inv.amount / 1.14975);
+      const res = await fetch(`${API}/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id:        inv.id || undefined,
+          type:      inv.type,
+          client_id: inv.client,
+          route:     inv.route,
+          date_from: inv.date_from || inv.dateFrom,
+          date_to:   inv.date_to   || inv.dateTo,
+          days:      inv.days,
+          subtotal:  subtotal.toFixed(2),
+          tps:       (subtotal * 0.05).toFixed(2),
+          tvq:       (subtotal * 0.09975).toFixed(2),
+          total:     inv.amount,
+        }),
+      });
       if (res.ok) {
         const saved = await res.json();
         setInvoices(prev => [{ ...inv, id: saved.id }, ...prev]);
