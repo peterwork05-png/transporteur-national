@@ -116,13 +116,25 @@ export default function AdminInvoices() {
     setDeleting(false);
   };
 
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailPreviewData, setEmailPreviewData] = useState(null);
+
+  const handlePreviewEmail = async () => {
+    try {
+      const res  = await fetch(`/api/invoices/${selected.id}/email-preview`);
+      const data = await res.json();
+      if (data.success) { setEmailPreviewData(data); setShowEmailPreview(true); }
+      else setEmailMsg(`❌ ${data.error}`);
+    } catch(e) { setEmailMsg(`❌ ${e.message}`); }
+  };
+
   const handleSendEmail = async () => {
     setSendingEmail(true);
     setEmailMsg('');
     try {
       const res  = await fetch(`/api/invoices/${selected.id}/send-email`, { method:'POST' });
       const data = await res.json();
-      if (data.success) setEmailMsg(`✅ Sent to ${data.sentTo}`);
+      if (data.success) { setEmailMsg(`✅ Sent to ${data.sentTo}`); setShowEmailPreview(false); }
       else setEmailMsg(`❌ ${data.error}`);
     } catch(e) { setEmailMsg(`❌ ${e.message}`); }
     setSendingEmail(false);
@@ -470,10 +482,10 @@ export default function AdminInvoices() {
                 <button onClick={() => setSelected(null)} className="btn btn-outline flex-1 justify-center">Close</button>
                 {selected.pdf_url && (
                   <>
-                    <button onClick={handleSendEmail} disabled={sendingEmail}
+                    <button onClick={handlePreviewEmail}
                       className="btn flex-1 justify-center"
-                      style={{background:'#0F6E56', color:'white', opacity:sendingEmail?0.6:1}}>
-                      {sendingEmail ? '⏳ Sending...' : '📧 Send to client'}
+                      style={{background:'#0F6E56', color:'white'}}>
+                      📧 Send to client
                     </button>
                     <a href={selected.pdf_url} target="_blank" rel="noreferrer"
                       className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
@@ -487,6 +499,66 @@ export default function AdminInvoices() {
                   {emailMsg}
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email preview modal */}
+      {showEmailPreview && emailPreviewData && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>📧 Email preview</p>
+              <button onClick={() => setShowEmailPreview(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>To</p>
+                <p className="text-sm font-medium">{emailPreviewData.to}</p>
+              </div>
+              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Subject</p>
+                <p className="text-sm font-medium">{emailPreviewData.subject}</p>
+              </div>
+              <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-2 font-medium" style={{color:'var(--tn-gold)'}}>Invoice details</p>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Invoice #</span>
+                    <span className="font-medium">#{emailPreviewData.invoiceId}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Period</span>
+                    <span className="font-medium">{emailPreviewData.dateFrom} – {emailPreviewData.dateTo}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{color:'var(--tn-gold)'}}>Type</span>
+                    <span className="font-medium">{emailPreviewData.type}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+                    <span>Total</span>
+                    <span style={{color:'var(--tn-red)'}}>{emailPreviewData.total}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
+                <span>📄</span>
+                <p className="text-sm" style={{color:'#0F6E56'}}>PDF download link will be included</p>
+              </div>
+              <div className="rounded-xl p-3" style={{background:'#EFF6FF'}}>
+                <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Email is sent in both French and English</p>
+              </div>
+              {emailMsg && (
+                <p className="text-xs text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{emailMsg}</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setShowEmailPreview(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                <button onClick={handleSendEmail} disabled={sendingEmail}
+                  className="btn flex-1 justify-center" style={{background:'#0F6E56',color:'white',opacity:sendingEmail?0.7:1}}>
+                  {sendingEmail ? '⏳ Sending...' : '📧 Send now'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
