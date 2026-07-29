@@ -159,19 +159,31 @@ export function AppProvider({ children }) {
   }, []);
 
   const addInvoice = useCallback(async (inv) => {
-    try {
-      const res = await fetch(`${API}/invoices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: inv.type, client_id: inv.client, route: inv.route,
-          date_from: inv.dateFrom, date_to: inv.dateTo, days: inv.days,
-          subtotal: inv.amount / 1.14975,
-          tps: (inv.amount / 1.14975) * 0.05,
-          tvq: (inv.amount / 1.14975) * 0.09975,
-          total: inv.amount,
-        }),
-      });
+  try {
+    const subtotal = inv.subtotal || (inv.amount / 1.14975);
+    const res = await fetch(`${API}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id:        inv.id || undefined,
+        type:      inv.type,
+        client_id: inv.client,
+        route:     inv.route,
+        date_from: inv.date_from || inv.dateFrom,
+        date_to:   inv.date_to   || inv.dateTo,
+        days:      inv.days,
+        subtotal:  subtotal.toFixed(2),
+        tps:       (subtotal * 0.05).toFixed(2),
+        tvq:       (subtotal * 0.09975).toFixed(2),
+        total:     inv.amount,
+      }),
+    });
+    if (res.ok) {
+      const saved = await res.json();
+      setInvoices(prev => [{ ...inv, id: saved.id }, ...prev]);
+    }
+  } catch (err) { setInvoices(prev => [inv, ...prev]); }
+}, []);
       if (res.ok) {
         const saved = await res.json();
         setInvoices(prev => [{ ...inv, id: saved.id }, ...prev]);
