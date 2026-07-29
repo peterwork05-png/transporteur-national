@@ -128,6 +128,8 @@ export default function AdminInvoices() {
     setSendingEmail(false);
     setTimeout(() => setEmailMsg(''), 5000);
   };
+
+  const handleStatusChange = async (newStatus) => {
     setUpdatingStatus(true);
     try {
       if (newStatus === 'paid') {
