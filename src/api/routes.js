@@ -1108,6 +1108,40 @@ router.post('/invoices/:id/send-email', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Email preview for invoice
+router.get('/invoices/:id/email-preview', async (req, res) => {
+  try {
+    const { rows: invRows } = await pool.query(`
+      SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group, c.name as client_name
+      FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1
+    `, [req.params.id]);
+    if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+
+    const { rows: contacts } = await pool.query(`
+      SELECT email FROM clients
+      WHERE client_group = (SELECT client_group FROM clients WHERE id = $1 LIMIT 1)
+      AND role = 'finance' AND active = true
+    `, [inv.client_id]);
+
+    if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found' });
+
+    const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
+    const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
+    const total    = `$${parseFloat(inv.total||0).toLocaleString('en-CA', {minimumFractionDigits:2})}`;
+    const typeLabel = inv.type === 'contract' ? `Contract · Route ${inv.route}` : 'Local deliveries';
+
+    res.json({
+      success: true,
+      to: contacts.map(c => c.email).join(', '),
+      subject: `Facture #${inv.id} — Transporteur National MC INC.`,
+      invoiceId: inv.id,
+      dateFrom, dateTo, total,
+      type: typeLabel,
+      hasPdf: !!inv.pdf_url,
+    });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;
 
