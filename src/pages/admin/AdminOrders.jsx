@@ -531,14 +531,24 @@ export default function AdminOrders() {
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={() => handleDelete(selected.id)} disabled={deleting}
                   className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
                   {deleting ? '...' : '🗑 Delete'}
                 </button>
+                {selected.status !== 'delivered' && (
+                  <button onClick={async () => {
+                    const now = new Date().toLocaleString('en-CA');
+                    await updateOrderStatus(selected.id, 'delivered', { delivered_at: now, recipient_name: 'Admin' });
+                    setSelected(prev => ({ ...prev, status: 'delivered', delivered_at: now }));
+                    if (period !== 'today') setAllOrders(prev => prev.map(o => o.id === selected.id ? { ...o, status: 'delivered', delivered_at: now } : o));
+                  }} className="btn btn-sm flex-1 justify-center" style={{background:'#0F6E56',color:'white'}}>
+                    ✓ Mark delivered
+                  </button>
+                )}
                 {(selected.status === 'enroute' || selected.status === 'picked') && (
                   <a href={`/track/${selected.id}`} target="_blank" rel="noreferrer"
-                    className="btn flex-1 justify-center" style={{background:'#185FA5',color:'white'}}>
+                    className="btn btn-sm flex-1 justify-center" style={{background:'#185FA5',color:'white'}}>
                     🗺️ Track live
                   </a>
                 )}
