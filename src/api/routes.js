@@ -672,10 +672,12 @@ router.post('/invoices/reminder-preview', async (req, res) => {
 
     if (contacts.length === 0) return res.status(400).json({ error: 'No finance contact found for this client' });
 
-    const toEmails = contacts.map(c => c.email).join(', ');
+    const toEmails = to ? to.split(',').map(e => e.trim()) : contacts.map(c => c.email);
+    const emailSubject = subject || `Facture #${inv.id} — Transporteur National MC INC.`;
     const total    = `$${parseFloat(inv.total || 0).toLocaleString('en-CA', { minimumFractionDigits: 2 })}`;
     const dateFrom = inv.date_from ? new Date(inv.date_from).toISOString().split('T')[0] : '';
     const dateTo   = inv.date_to   ? new Date(inv.date_to).toISOString().split('T')[0]   : '';
+    const noteHtml = note ? `<div style="background:#FEF3C7;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #D97706"><p style="margin:0;color:#92400E;font-size:13px">${note}</p></div>` : '';
 
     res.json({
       success: true,
@@ -1026,6 +1028,7 @@ router.post('/invoices/generate-contract', async (req, res) => {
 // Send invoice by email to client
 router.post('/invoices/:id/send-email', async (req, res) => {
   try {
+    const { to, subject, note } = req.body;
     const { rows: invRows } = await pool.query(`
       SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group, c.name as client_name
       FROM invoices i
@@ -1057,6 +1060,7 @@ router.post('/invoices/:id/send-email', async (req, res) => {
           <h1 style="color:#FAF7F0;margin:0;font-size:20px">🦅 Transporteur National MC INC.</h1>
         </div>
         <div style="padding:30px;background:#FAF7F0">
+        ${noteHtml}
           <p style="color:#1A1208">Bonjour / Hello,</p>
           <p style="color:#1A1208">Veuillez trouver ci-joint votre facture. / Please find your invoice below.</p>
           <div style="background:white;border-radius:12px;padding:20px;margin:20px 0;border:1px solid #e0d9cc">
@@ -1092,8 +1096,8 @@ router.post('/invoices/:id/send-email', async (req, res) => {
       },
       body: JSON.stringify({
         from: 'Transporteur National MC <onboarding@resend.dev>',
-        to: toEmails,
-        subject: `Facture #${inv.id} — Transporteur National MC INC.`,
+        to: Array.isArray(toEmails) ? toEmails : [toEmails],
+        subject: emailSubject,
         html,
       }),
     });
