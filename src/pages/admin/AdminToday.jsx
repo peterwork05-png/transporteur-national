@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { CLIENTS } from '../../data/store';
@@ -15,7 +15,16 @@ export default function AdminToday() {
   const { orders, ontarioRoute, quebecRoute, invoices, fetchOrders, drivers } = useApp();
   const navigate = useNavigate();
   const [activityDetail, setActivityDetail] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const today = format(new Date(), 'EEEE, MMMM d, yyyy');
+
+  useEffect(() => {
+    fetch('/api/stats/dashboard')
+      .then(r => r.json())
+      .then(data => { setStats(data); setStatsLoading(false); })
+      .catch(() => setStatsLoading(false));
+  }, []);
 
   const todayOrders = orders.filter(o => {
     const orderDate = o.date?.split('T')[0];
@@ -31,59 +40,27 @@ export default function AdminToday() {
   const onDone  = ontarioRoute.stopStatus.filter(s => s === 'delivered').length;
   const qcDone  = quebecRoute.stopStatus.filter(s => s === 'delivered').length;
 
+  const fmt = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const clientName = (o) => o.clientName || o.client_name || CLIENTS[o.client]?.name || o.client || '—';
   const driverName = (o) => o.driverName || o.driver_name || (o.driver==='peter'?'Peter':o.driver==='marc'?'Marc D.':o.driver||'—');
 
-  // Build real activity from actual data
   const recentActivity = [
-    // Real delivered orders
     ...todayOrders
       .filter(o => o.status === 'delivered')
       .sort((a,b) => (b.deliveredAt||'').localeCompare(a.deliveredAt||''))
       .slice(0, 3)
-      .map(o => ({
-        icon: '✅',
-        text: `Delivered — ${clientName(o)}`,
-        sub: `${driverName(o)} · ${o.deliveredAt || o.delivered_at || ''} · ${o.boxes} boxes`,
-        color: '#0F6E56',
-        type: 'delivery',
-        data: o,
-      })),
-    // Real en-route orders
+      .map(o => ({ icon:'✅', text:`Delivered — ${clientName(o)}`, sub:`${driverName(o)} · ${o.deliveredAt || o.delivered_at || ''} · ${o.boxes} boxes`, color:'#0F6E56', type:'delivery', data:o })),
     ...todayOrders
       .filter(o => o.status === 'enroute')
       .slice(0, 2)
-      .map(o => ({
-        icon: '🚚',
-        text: `En route — ${clientName(o)}`,
-        sub: `${driverName(o)} · On the way`,
-        color: '#185FA5',
-        type: 'enroute',
-        data: o,
-      })),
-    // Real picked-up orders
+      .map(o => ({ icon:'🚚', text:`En route — ${clientName(o)}`, sub:`${driverName(o)} · On the way`, color:'#185FA5', type:'enroute', data:o })),
     ...todayOrders
       .filter(o => o.status === 'picked')
       .slice(0, 1)
-      .map(o => ({
-        icon: '📦',
-        text: `Picked up — ${clientName(o)}`,
-        sub: `${driverName(o)} · ${o.pickedUpAt || o.picked_up_at || ''}`,
-        color: '#B45309',
-        type: 'pickup',
-        data: o,
-      })),
-    // Real paid invoices
+      .map(o => ({ icon:'📦', text:`Picked up — ${clientName(o)}`, sub:`${driverName(o)} · ${o.pickedUpAt || o.picked_up_at || ''}`, color:'#B45309', type:'pickup', data:o })),
     ...paidInvoices
       .slice(0, 2)
-      .map(inv => ({
-        icon: '💳',
-        text: `Payment received — ${inv.client_name || CLIENTS[inv.client]?.name || inv.client || ''}`,
-        sub: `Invoice #${inv.id} · $${parseFloat(inv.amount||0).toFixed(2)}${inv.eft ? ` · EFT #${inv.eft}` : ''}`,
-        color: 'var(--tn-gold)',
-        type: 'payment',
-        data: inv,
-      })),
+      .map(inv => ({ icon:'💳', text:`Payment received — ${inv.client_name || CLIENTS[inv.client]?.name || inv.client || ''}`, sub:`Invoice #${inv.id} · $${parseFloat(inv.amount||0).toFixed(2)}${inv.eft ? ` · EFT #${inv.eft}` : ''}`, color:'var(--tn-gold)', type:'payment', data:inv })),
   ].slice(0, 5);
 
   const kpis = [
@@ -107,14 +84,13 @@ export default function AdminToday() {
         </div>
       </div>
 
-      {/* Driver avatars — from database */}
+      {/* Driver avatars */}
       <div className="flex items-center gap-2 mb-5">
         <p className="text-xs" style={{color:'var(--tn-gold)'}}>On duty:</p>
         <div className="flex -space-x-1.5">
-          {(drivers || []).map((d, idx) => (
+          {(drivers || []).map((d) => (
             <div key={d.id} className="w-7 h-7 rounded-full border-2 flex items-center justify-center text-white text-xs font-bold"
-              style={{borderColor:'var(--tn-cream)', background: d.color}}
-              title={d.name}>
+              style={{borderColor:'var(--tn-cream)', background: d.color}} title={d.name}>
               {d.initials}
             </div>
           ))}
@@ -132,6 +108,94 @@ export default function AdminToday() {
         ))}
       </div>
 
+      {/* Dashboard Stats */}
+      <div className="card p-4 mb-4">
+        <h2 className="font-semibold text-sm mb-3">📊 Revenue & performance</h2>
+        {statsLoading ? (
+          <div className="text-center py-4 text-sm" style={{color:'var(--tn-gold)'}}>Loading stats...</div>
+        ) : stats ? (
+          <div className="space-y-4">
+            {/* Today's revenue */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl p-3 text-center" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>Today's revenue</p>
+                <p className="text-lg font-bold" style={{color:'var(--tn-red)'}}>{fmt(stats.today_revenue)}</p>
+                <p className="text-xs" style={{color:'var(--tn-gold)'}}>{stats.today_orders} orders</p>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>This week</p>
+                <p className="text-lg font-bold" style={{color:'var(--tn-red)'}}>{fmt(stats.week_revenue)}</p>
+                <p className="text-xs" style={{color:'var(--tn-gold)'}}>{stats.week_orders} orders</p>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs mb-1" style={{color:'var(--tn-gold)'}}>This month</p>
+                <p className="text-lg font-bold" style={{color:'var(--tn-red)'}}>{fmt(stats.month_revenue)}</p>
+                <p className="text-xs" style={{color:'var(--tn-gold)'}}>{stats.month_orders} orders</p>
+              </div>
+            </div>
+
+            {/* Monthly comparison */}
+            <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium" style={{color:'var(--tn-gold)'}}>vs Last month</p>
+                {parseFloat(stats.month_revenue) >= parseFloat(stats.last_month_revenue) ? (
+                  <span className="badge badge-success text-xs">▲ Up</span>
+                ) : (
+                  <span className="badge badge-danger text-xs">▼ Down</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>This month</p>
+                  <p className="font-semibold text-sm">{fmt(stats.month_revenue)}</p>
+                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>{stats.month_orders} orders</p>
+                </div>
+                <div>
+                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>Last month</p>
+                  <p className="font-semibold text-sm">{fmt(stats.last_month_revenue)}</p>
+                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>{stats.last_month_orders} orders</p>
+                </div>
+              </div>
+              {/* Progress bar showing this month vs last month */}
+              <div className="mt-2">
+                <div className="progress-bar">
+                  <div className="progress-fill-red" style={{
+                    width: `${Math.min(100, parseFloat(stats.last_month_revenue) > 0
+                      ? (parseFloat(stats.month_revenue) / parseFloat(stats.last_month_revenue)) * 100
+                      : 100)}%`
+                  }}/>
+                </div>
+                <p className="text-xs mt-1 text-right" style={{color:'var(--tn-gold)'}}>
+                  {parseFloat(stats.last_month_revenue) > 0
+                    ? `${Math.round((parseFloat(stats.month_revenue) / parseFloat(stats.last_month_revenue)) * 100)}% of last month`
+                    : 'First month'}
+                </p>
+              </div>
+            </div>
+
+            {/* Top clients this month */}
+            {stats.top_clients && stats.top_clients.length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>Top clients this month</p>
+                <div className="space-y-1.5">
+                  {stats.top_clients.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2" style={{background:'var(--tn-warm)'}}>
+                      <p className="text-sm font-medium truncate flex-1">{c.name}</p>
+                      <div className="text-right flex-shrink-0 ml-2">
+                        <p className="text-sm font-bold" style={{color:'var(--tn-red)'}}>{fmt(c.revenue)}</p>
+                        <p className="text-xs" style={{color:'var(--tn-gold)'}}>{c.orders} orders</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-center py-4" style={{color:'var(--tn-gold)'}}>Could not load stats</p>
+        )}
+      </div>
+
       {/* Active orders */}
       <div className="card p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -146,8 +210,7 @@ export default function AdminToday() {
               const b = STATUS_BADGE[order.status]||STATUS_BADGE.waiting;
               return (
                 <div key={order.id} className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer"
-                  style={{background:'var(--tn-warm)'}}
-                  onClick={()=>navigate('/admin/orders')}>
+                  style={{background:'var(--tn-warm)'}} onClick={()=>navigate('/admin/orders')}>
                   <div className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{background:order.status==='enroute'?'var(--tn-red)':'var(--tn-gold)'}}/>
                   <div className="flex-1 min-w-0">
@@ -172,28 +235,27 @@ export default function AdminToday() {
           <span className="badge badge-success">Both active</span>
         </div>
         <div className="space-y-4">
-        {(() => {
-          const ontarioDriver = drivers?.find(d => d.role === 'ontario');
-          const quebecDriver  = drivers?.find(d => d.role === 'quebec');
-          return [
-            {label:'Ontario / Gatineau', done:onDone, total:15, driver: ontarioDriver?.name || 'Ontario driver', fillCls:'progress-fill-red',  started:ontarioRoute.started},
-            {label:'Québec route',       done:qcDone, total:10, driver: quebecDriver?.name  || 'Québec driver',  fillCls:'progress-fill-gold', started:quebecRoute.started},
-          ].map((route,i)=>(
-            <div key={i} className="cursor-pointer" onClick={()=>navigate('/admin/routes')}>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-sm font-medium">{route.label}</p>
-                <span className="badge badge-info text-xs">{route.done}/{route.total}</span>
+          {(() => {
+            const ontarioDriver = drivers?.find(d => d.role === 'ontario');
+            const quebecDriver  = drivers?.find(d => d.role === 'quebec');
+            return [
+              {label:'Ontario / Gatineau', done:onDone, total:15, driver: ontarioDriver?.name || 'Ontario driver', fillCls:'progress-fill-red',  started:ontarioRoute.started},
+              {label:'Québec route',       done:qcDone, total:10, driver: quebecDriver?.name  || 'Québec driver',  fillCls:'progress-fill-gold', started:quebecRoute.started},
+            ].map((route,i)=>(
+              <div key={i} className="cursor-pointer" onClick={()=>navigate('/admin/routes')}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium">{route.label}</p>
+                  <span className="badge badge-info text-xs">{route.done}/{route.total}</span>
+                </div>
+                <p className="text-xs mb-2" style={{color:'var(--tn-gold)'}}>{route.driver} · {route.started?'In progress':'Not started'}</p>
+                <div className="progress-bar"><div className={route.fillCls} style={{width:`${(route.done/route.total)*100}%`}}/></div>
               </div>
-              <p className="text-xs mb-2" style={{color:'var(--tn-gold)'}}>{route.driver} · {route.started?'In progress':'Not started'}</p>
-              <div className="progress-bar"><div className={route.fillCls} style={{width:`${(route.done/route.total)*100}%`}}/></div>
-            </div>
-          ));
-        })()}
-          <p className="text-xs" style={{color:'var(--tn-gold)',borderTop:'0.5px solid var(--tn-border)',paddingTop:'8px'}}>Auto-invoice generates Sunday</p>
+            ));
+          })()}
         </div>
       </div>
 
-      {/* Recent activity — all real, all clickable */}
+      {/* Recent activity */}
       <div className="card p-4">
         <h2 className="font-semibold text-sm mb-3">Recent activity</h2>
         {recentActivity.length === 0 ? (
@@ -222,8 +284,6 @@ export default function AdminToday() {
           style={{background:'rgba(26,18,8,0.6)'}} onClick={()=>setActivityDetail(null)}>
           <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[85vh] overflow-y-auto"
             style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
-
-            {/* Header */}
             <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
               <div className="flex items-center gap-2">
                 <span className="text-lg">{activityDetail.icon}</span>
@@ -231,9 +291,7 @@ export default function AdminToday() {
               </div>
               <button onClick={()=>setActivityDetail(null)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
             </div>
-
             <div className="p-5 space-y-3">
-              {/* Delivery detail */}
               {(activityDetail.type === 'delivery' || activityDetail.type === 'enroute' || activityDetail.type === 'pickup') && activityDetail.data && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -242,12 +300,8 @@ export default function AdminToday() {
                       {label:'Driver',        val: driverName(activityDetail.data)},
                       {label:'Address',       val: activityDetail.data.address},
                       {label:'Status',        val: activityDetail.data.status?.charAt(0).toUpperCase() + activityDetail.data.status?.slice(1)},
-                      activityDetail.data.deliveredAt || activityDetail.data.delivered_at
-                        ? {label:'Delivered at', val: activityDetail.data.deliveredAt || activityDetail.data.delivered_at}
-                        : null,
-                      activityDetail.data.pickedUpAt || activityDetail.data.picked_up_at
-                        ? {label:'Picked up at', val: activityDetail.data.pickedUpAt || activityDetail.data.picked_up_at}
-                        : null,
+                      activityDetail.data.deliveredAt || activityDetail.data.delivered_at ? {label:'Delivered at', val: activityDetail.data.deliveredAt || activityDetail.data.delivered_at} : null,
+                      activityDetail.data.pickedUpAt || activityDetail.data.picked_up_at ? {label:'Picked up at', val: activityDetail.data.pickedUpAt || activityDetail.data.picked_up_at} : null,
                       {label:'Boxes', val: `${activityDetail.data.boxes} boxes`},
                       {label:'Order ID', val: activityDetail.data.id},
                     ].filter(Boolean).map((item,i)=>(
@@ -257,8 +311,6 @@ export default function AdminToday() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Proof of delivery */}
                   {activityDetail.type === 'delivery' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl h-24 flex flex-col items-center justify-center gap-1.5"
@@ -277,15 +329,12 @@ export default function AdminToday() {
                       </div>
                     </div>
                   )}
-
                   <button onClick={()=>{ setActivityDetail(null); navigate('/admin/orders'); }}
                     className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white'}}>
                     View full order →
                   </button>
                 </>
               )}
-
-              {/* Payment detail */}
               {activityDetail.type === 'payment' && activityDetail.data && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -304,7 +353,6 @@ export default function AdminToday() {
                       </div>
                     ))}
                   </div>
-
                   <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
                     <span className="text-lg">💳</span>
                     <div>
@@ -314,7 +362,6 @@ export default function AdminToday() {
                       </p>
                     </div>
                   </div>
-
                   <button onClick={()=>{ setActivityDetail(null); navigate('/admin/invoices'); }}
                     className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white'}}>
                     View all invoices →
