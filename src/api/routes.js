@@ -1145,7 +1145,44 @@ router.get('/invoices/:id/email-preview', async (req, res) => {
     });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Dashboard stats
+router.get('/stats/dashboard', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        -- Today
+        COALESCE(SUM(CASE WHEN DATE(o.date) = CURRENT_DATE AND o.status = 'delivered' THEN o.amount ELSE 0 END), 0) as today_revenue,
+        COUNT(CASE WHEN DATE(o.date) = CURRENT_DATE THEN 1 END) as today_orders,
+        -- This week
+        COALESCE(SUM(CASE WHEN o.date >= DATE_TRUNC('week', NOW()) AND o.status = 'delivered' THEN o.amount ELSE 0 END), 0) as week_revenue,
+        COUNT(CASE WHEN o.date >= DATE_TRUNC('week', NOW()) THEN 1 END) as week_orders,
+        -- This month
+        COALESCE(SUM(CASE WHEN o.date >= DATE_TRUNC('month', NOW()) AND o.status = 'delivered' THEN o.amount ELSE 0 END), 0) as month_revenue,
+        COUNT(CASE WHEN o.date >= DATE_TRUNC('month', NOW()) THEN 1 END) as month_orders,
+        -- Last month
+        COALESCE(SUM(CASE WHEN o.date >= DATE_TRUNC('month', NOW() - INTERVAL '1 month') AND o.date < DATE_TRUNC('month', NOW()) AND o.status = 'delivered' THEN o.amount ELSE 0 END), 0) as last_month_revenue,
+        COUNT(CASE WHEN o.date >= DATE_TRUNC('month', NOW() - INTERVAL '1 month') AND o.date < DATE_TRUNC('month', NOW()) THEN 1 END) as last_month_orders
+      FROM orders o
+    `);
 
+    // Top clients this month
+    const { rows: topClients } = await pool.query(`
+      SELECT 
+        COALESCE(c.name, o.client_id) as name,
+        COUNT(*) as orders,
+        COALESCE(SUM(o.amount), 0) as revenue
+      FROM orders o
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE o.date >= DATE_TRUNC('month', NOW())
+        AND o.status = 'delivered'
+      GROUP BY COALESCE(c.name, o.client_id)
+      ORDER BY revenue DESC
+      LIMIT 3
+    `);
+
+    res.json({ ...rows[0], top_clients: topClients });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
