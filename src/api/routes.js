@@ -435,9 +435,18 @@ router.post('/auth/verify-pin', async (req, res) => {
       return res.json({ success: rows.length > 0 });
     }
     if (type === 'driver') {
-      const { rows } = await pool.query('SELECT * FROM drivers WHERE id = $1 AND pin = $2 AND active = true', [id, pin]);
-      return res.json({ success: rows.length > 0, driver: rows[0] });
-    }
+  // If id provided, verify by id + pin. Otherwise find by pin alone.
+  let query, params;
+  if (id) {
+    query = 'SELECT * FROM drivers WHERE id = $1 AND pin = $2 AND active = true';
+    params = [id, pin];
+  } else {
+    query = 'SELECT * FROM drivers WHERE pin = $1 AND active = true LIMIT 1';
+    params = [pin];
+  }
+  const { rows } = await pool.query(query, params);
+  return res.json({ success: rows.length > 0, driver: rows[0] });
+}
     res.status(400).json({ error: 'Invalid type' });
   } catch (err) {
     res.status(500).json({ error: err.message });
