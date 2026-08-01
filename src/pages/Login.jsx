@@ -44,7 +44,6 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
     if (!loading) { setPin(p => p.slice(0, -1)); setError(''); }
   }, [loading]);
 
-  // ── Keyboard support ──
   useEffect(() => {
     const onKey = (e) => {
       if (e.key >= '0' && e.key <= '9') handleDigit(e.key);
@@ -60,14 +59,11 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
     <div className="w-full max-w-xs mx-auto">
       <button onClick={onBack} className="flex items-center gap-2 text-sm mb-6"
         style={{color:'rgba(250,247,240,0.4)'}}>← Back</button>
-
       <div className="text-center mb-8">
         <p className="text-lg font-semibold mb-1" style={{color:'var(--tn-cream)'}}>{title}</p>
         <p className="text-sm" style={{color:'rgba(250,247,240,0.35)'}}>{subtitle}</p>
         <p className="text-xs mt-1" style={{color:'rgba(250,247,240,0.2)'}}>Type on your keyboard or tap below</p>
       </div>
-
-      {/* PIN dots */}
       <div className={`flex justify-center gap-4 mb-2 transition-all ${shake ? 'translate-x-2' : ''}`}>
         {[0,1,2,3].map(i => (
           <div key={i} className="w-4 h-4 rounded-full transition-all"
@@ -77,13 +73,10 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
             }} />
         ))}
       </div>
-
       {error
         ? <p className="text-center text-xs mb-4" style={{color:'#F87171'}}>{error}</p>
         : <div className="mb-4 h-4" />
       }
-
-      {/* Keypad */}
       <div className="space-y-3">
         {rows.map((row, ri) => (
           <div key={ri} className="grid grid-cols-3 gap-3">
@@ -109,14 +102,12 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
 }
 
 export default function Login() {
-  const { login, verifyPin, drivers, fetchDrivers } = useApp();
+  const { login, verifyPin } = useApp();
   const navigate = useNavigate();
   const [screen, setScreen] = useState('home');
-  const [selectedDriver, setSelectedDriver] = useState(null);
 
-  useEffect(() => { fetchDrivers(); }, []);
+  const enterAdmin = () => { login('admin', 'Admin'); navigate('/admin'); };
 
-  const enterAdmin  = () => { login('admin', 'Admin'); navigate('/admin'); };
   const enterDriver = (driver) => {
     login(driver.id, driver.name);
     const path = DRIVER_PATHS[driver.role]?.(driver.id) || `/driver/local/${driver.id}`;
@@ -125,12 +116,10 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{background:'var(--tn-dark)'}}>
-      {/* Ambient circles */}
       <div style={{position:'fixed',top:'-80px',right:'-80px',width:'300px',height:'300px',background:'var(--tn-red)',borderRadius:'50%',opacity:0.06,pointerEvents:'none'}}/>
       <div style={{position:'fixed',bottom:'-60px',left:'-60px',width:'200px',height:'200px',background:'var(--tn-gold)',borderRadius:'50%',opacity:0.08,pointerEvents:'none'}}/>
 
       <div className="w-full max-w-sm relative z-10">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
             style={{background:'rgba(139,105,20,0.15)',border:'1px solid rgba(139,105,20,0.25)'}}>
@@ -146,10 +135,10 @@ export default function Login() {
             <p className="text-xs uppercase tracking-wider mb-4" style={{color:'rgba(250,247,240,0.3)'}}>Select access</p>
             <div className="space-y-2">
               {[
-                { label:'Admin', desc:'Full dashboard access · PIN required', icon:'⚙️', accent:'rgba(192,57,43,0.15)', border:'rgba(192,57,43,0.2)', bg:'rgba(192,57,43,0.08)', action:() => setScreen('admin-pin') },
-                { label:'Drivers', desc:'Select your name · PIN required', icon:'🚚', accent:'rgba(139,105,20,0.15)', border:'rgba(139,105,20,0.2)', bg:'rgba(139,105,20,0.08)', action:() => setScreen('drivers') },
-                { label:'Client portal', desc:'Orders, invoices & proof of delivery', icon:'🏢', accent:'rgba(250,247,240,0.06)', border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/portal') },
-                { label:'Track an order', desc:'Search by order number, date or address', icon:'📦', accent:'rgba(250,247,240,0.06)', border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/track') },
+                { label:'Admin',         desc:'Full dashboard access · PIN required',   icon:'⚙️', accent:'rgba(192,57,43,0.15)',    border:'rgba(192,57,43,0.2)',    bg:'rgba(192,57,43,0.08)',    action:() => setScreen('admin-pin') },
+                { label:'Driver',        desc:'PIN required',                            icon:'🚚', accent:'rgba(139,105,20,0.15)',    border:'rgba(139,105,20,0.2)',    bg:'rgba(139,105,20,0.08)',    action:() => setScreen('driver-pin') },
+                { label:'Client portal', desc:'Orders, invoices & proof of delivery',   icon:'🏢', accent:'rgba(250,247,240,0.06)',   border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/portal') },
+                { label:'Track an order',desc:'Search by order number, date or address',icon:'📦', accent:'rgba(250,247,240,0.06)',   border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/track') },
               ].map((item, i) => (
                 <button key={i} onClick={item.action}
                   className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
@@ -181,43 +170,17 @@ export default function Login() {
           />
         )}
 
-        {/* Drivers list */}
-        {screen === 'drivers' && (
-          <div className="rounded-2xl p-5" style={{background:'rgba(250,247,240,0.04)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
-            <button onClick={() => setScreen('home')} className="flex items-center gap-2 text-sm mb-4"
-              style={{color:'rgba(250,247,240,0.4)'}}>← Back</button>
-            <p className="text-xs uppercase tracking-wider mb-4" style={{color:'rgba(250,247,240,0.3)'}}>Select your name</p>
-            <div className="space-y-2">
-              {(drivers || []).map(driver => (
-                <button key={driver.id}
-                  onClick={() => { setSelectedDriver(driver); setScreen('driver-pin'); }}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
-                  style={{background:'rgba(250,247,240,0.04)',border:'0.5px solid rgba(139,105,20,0.15)'}}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                    style={{background: driver.color}}>
-                    {driver.initials}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{color:'var(--tn-cream)'}}>{driver.name}</p>
-                    <p className="text-xs" style={{color:'rgba(250,247,240,0.3)'}}>
-                      {driver.role==='local'?'Local deliveries':driver.role==='ontario'?'Ontario / Gatineau route':'Québec route'}
-                    </p>
-                  </div>
-                  <span className="ml-auto" style={{color:'rgba(250,247,240,0.2)'}}>→</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Driver PIN */}
-        {screen === 'driver-pin' && selectedDriver && (
+        {/* Driver PIN — no names shown */}
+        {screen === 'driver-pin' && (
           <PinPad
-            title={selectedDriver.name}
+            title="Driver access"
             subtitle="Enter your 4-digit PIN"
-            onBack={() => setScreen('drivers')}
-            onPinComplete={async (pin) => verifyPin('driver', pin, selectedDriver.id)}
-            onSuccess={() => enterDriver(selectedDriver)}
+            onBack={() => setScreen('home')}
+            onPinComplete={async (pin) => verifyPin('driver', pin)}
+            onSuccess={(result) => {
+              const driver = result.driver;
+              if (driver) enterDriver(driver);
+            }}
           />
         )}
 
