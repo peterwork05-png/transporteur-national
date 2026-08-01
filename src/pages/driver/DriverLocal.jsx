@@ -10,10 +10,12 @@ const STATUS_COLOR = { waiting:'badge-gray', picked:'badge-warning', enroute:'ba
 
 export default function DriverLocal() {
   const { driverId } = useParams();
-  const driver         = driverId || 'marc';
-  const driverName     = driver === 'peter' ? 'Peter' : 'Marc Dumont';
-  const driverColor    = driver === 'peter' ? '#7C3AED' : 'var(--tn-red)';
-  const driverInitials = driver === 'peter' ? 'PE' : 'MD';
+  const { drivers } = useApp();
+
+  const driverObj      = drivers?.find(d => d.id === driverId);
+  const driverName     = driverObj?.name     || driverId || 'Driver';
+  const driverColor    = driverObj?.color    || 'var(--tn-red)';
+  const driverInitials = driverObj?.initials || driverId?.substring(0,2).toUpperCase() || 'DR';
 
   const [orders,        setOrders]        = useState([]);
   const [loading,       setLoading]       = useState(true);
