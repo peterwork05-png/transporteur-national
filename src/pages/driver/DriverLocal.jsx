@@ -31,16 +31,17 @@ export default function DriverLocal() {
   const [photoTaken,    setPhotoTaken]    = useState(false);
   const [photoDataUrl,  setPhotoDataUrl]  = useState(null);
   const [photoFile,     setPhotoFile]     = useState(null);
-  const [sigDataUrl, setSigDataUrl] = useState(null);
+  const [sigDataUrl,    setSigDataUrl]    = useState(null);
   const sigCanvasRef = useRef(null);
   const locationInterval = useRef(null);
-  usePushNotifications('driver', driver?.id);
+
+  usePushNotifications('driver', driverId);
 
   const fetchMyOrders = useCallback(async () => {
     try {
       const url = period === '7days'
-        ? `/api/orders?driver_id=${driver}&days=7`
-        : `/api/orders?driver_id=${driver}`;
+        ? `/api/orders?driver_id=${driverId}&days=7`
+        : `/api/orders?driver_id=${driverId}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -63,29 +64,28 @@ export default function DriverLocal() {
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [driver, period]);
+  }, [driverId, period]);
 
   useEffect(() => {
     fetchMyOrders();
     const iv = period === 'today' ? setInterval(fetchMyOrders, 30000) : null;
     return () => { if (iv) clearInterval(iv); };
-  }, [driver, period, fetchMyOrders]);
+  }, [driverId, period, fetchMyOrders]);
 
-  // GPS location sharing when enroute
   const startLocationSharing = useCallback(() => {
     if (!navigator.geolocation) return;
     const sendLocation = () => {
       navigator.geolocation.getCurrentPosition(pos => {
-        fetch(`/api/drivers/${driver}/location`, {
+        fetch(`/api/drivers/${driverId}/location`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         }).catch(() => {});
       }, () => {}, { enableHighAccuracy: true });
     };
-    sendLocation(); // send immediately
-    locationInterval.current = setInterval(sendLocation, 30000); // then every 30s
-  }, [driver]);
+    sendLocation();
+    locationInterval.current = setInterval(sendLocation, 30000);
+  }, [driverId]);
 
   const stopLocationSharing = useCallback(() => {
     if (locationInterval.current) {
@@ -126,7 +126,7 @@ export default function DriverLocal() {
     if (activeEnroute) return alert('Finish current delivery first');
     setActiveEnroute(id);
     updateStatus(id, 'enroute', { on_way_at: now() });
-    startLocationSharing(); // 🗺️ Start GPS sharing
+    startLocationSharing();
   };
 
   const openProof = id => {
@@ -144,7 +144,6 @@ export default function DriverLocal() {
     let photo_url = null;
     let signature_url = null;
 
-    // Upload photo to Cloudinary
     if (photoFile) {
       try {
         const reader = new FileReader();
@@ -162,7 +161,6 @@ export default function DriverLocal() {
       } catch(e) { console.error('Photo upload failed:', e); }
     }
 
-    // Upload signature from saved data URL
     if (sigDataUrl) {
       try {
         const sigBase64 = sigDataUrl.split(',')[1];
@@ -239,9 +237,9 @@ export default function DriverLocal() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label:'Delivered',  val:delivered, color:'var(--tn-red)',  key:'delivered' },
-            { label:'Remaining',  val:remaining, color:'var(--tn-gold)', key:'remaining' },
-            { label:'All orders', val:orders.length, color:'#185FA5',   key:'all' },
+            { label:'Delivered',  val:delivered,      color:'var(--tn-red)',  key:'delivered' },
+            { label:'Remaining',  val:remaining,      color:'var(--tn-gold)', key:'remaining' },
+            { label:'All orders', val:orders.length,  color:'#185FA5',        key:'all' },
           ].map((s,i) => (
             <button key={i} onClick={() => setFilter(s.key)}
               className="card p-3 text-center transition-all"
@@ -317,7 +315,6 @@ export default function DriverLocal() {
                       </div>
                     </div>
 
-                    {/* Timeline dots */}
                     <div className="flex items-center gap-0 mt-3">
                       {['Assigned','Picked up','En route','Delivered'].map((step,si) => (
                         <div key={step} className="flex items-center flex-1 last:flex-none">
@@ -331,7 +328,6 @@ export default function DriverLocal() {
                     </div>
                   </div>
 
-                  {/* Expanded details */}
                   {isExp && (
                     <div className="px-4 pb-4 space-y-2 border-t" style={{borderColor:'var(--tn-border)'}}>
                       <div className="rounded-xl p-3 mt-3" style={{background:'var(--tn-warm)'}}>
@@ -373,7 +369,6 @@ export default function DriverLocal() {
                     </div>
                   )}
 
-                  {/* Actions */}
                   <div className="px-4 pb-4">
                     {order.status==='waiting'&&(
                       <button onClick={()=>pickUp(order.id)} className="btn btn-sm w-full justify-center" style={{background:'var(--tn-gold)',color:'white'}}>📦 Mark as picked up</button>
@@ -427,7 +422,6 @@ export default function DriverLocal() {
               <button onClick={()=>setShowProof(null)} className="text-xl leading-none" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
 
-            {/* Steps */}
             <div className="flex items-center gap-0 mb-5">
               {['Photo','Signature','Confirm'].map((step,i)=>(
                 <div key={step} className="flex items-center flex-1 last:flex-none">
@@ -440,7 +434,6 @@ export default function DriverLocal() {
               ))}
             </div>
 
-            {/* Step 1 — Camera */}
             {proofStep===1&&(
               <div>
                 <p className="font-medium text-sm mb-3">Take a photo of the delivery</p>
@@ -460,7 +453,6 @@ export default function DriverLocal() {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        // Show preview
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           setPhotoTaken(true);
@@ -487,7 +479,6 @@ export default function DriverLocal() {
               </div>
             )}
 
-            {/* Step 2 — Signature */}
             {proofStep===2&&(
               <div>
                 <p className="font-medium text-sm mb-3">Recipient signature</p>
@@ -539,7 +530,6 @@ export default function DriverLocal() {
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>setProofStep(1)} className="btn btn-outline">← Back</button>
                   <button disabled={!sigDrawn||!recipientName} onClick={()=>{
-                    // Save signature to state before canvas unmounts
                     if (sigCanvasRef.current) {
                       const canvas = sigCanvasRef.current;
                       const exportCanvas = document.createElement('canvas');
@@ -560,7 +550,6 @@ export default function DriverLocal() {
               </div>
             )}
 
-            {/* Step 3 — Confirm */}
             {proofStep===3&&(
               <div>
                 <p className="font-medium text-sm mb-3">Review & confirm</p>
