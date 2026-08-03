@@ -3,14 +3,15 @@ import { useApp } from '../../context/AppContext';
 import { CLIENTS } from '../../data/store';
 
 const STATUS_BADGE = {
-  waiting:   { label:'Waiting',   cls:'badge-gray' },
-  picked:    { label:'Picked up', cls:'badge-warning' },
-  enroute:   { label:'En route',  cls:'badge-info' },
-  delivered: { label:'Delivered', cls:'badge-success' },
+  waiting:   { label:'Waiting',            cls:'badge-gray' },
+  picked:    { label:'Picked up',          cls:'badge-warning' },
+  enroute:   { label:'En route',           cls:'badge-info' },
+  delivered: { label:'Delivered',          cls:'badge-success' },
+  attempted: { label:'Attempted delivery', cls:'badge-danger' },
 };
 
 const STATUS_STEPS  = ['waiting','picked','enroute','delivered'];
-const STATUS_LABELS = { waiting:'Order placed', picked:'Picked up', enroute:'En route', delivered:'Delivered' };
+const STATUS_LABELS = { waiting:'Order placed', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
 
 export default function AdminOrders() {
   const { orders, drivers, fetchOrders, updateOrderStatus } = useApp();
@@ -67,6 +68,7 @@ export default function AdminOrders() {
     if (tab === 'Unassigned') return !o.driver && !o.driver_id;
     if (tab === 'Active')     return ['waiting','picked','enroute'].includes(o.status);
     if (tab === 'Delivered')  return o.status === 'delivered';
+    if (tab === 'Attempted')  return o.status === 'attempted';
     return true;
   });
 
@@ -75,6 +77,7 @@ export default function AdminOrders() {
     { label:`Unassigned (${displayOrders.filter(o=>!o.driver&&!o.driver_id).length})`,                   val:'Unassigned' },
     { label:`Active (${displayOrders.filter(o=>['waiting','picked','enroute'].includes(o.status)).length})`, val:'Active' },
     { label:`Delivered (${displayOrders.filter(o=>o.status==='delivered').length})`,                      val:'Delivered' },
+    { label:`Attempted (${displayOrders.filter(o=>o.status==='attempted').length})`,                      val:'Attempted' },
   ];
 
   const clientName = (o) => o.clientName || o.client_name || o.to_business_name || o.billing_name || CLIENTS[o.client]?.name || o.client || '—';
@@ -572,7 +575,7 @@ export default function AdminOrders() {
                   className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
                   {deleting ? '...' : '🗑 Delete'}
                 </button>
-                {selected.status !== 'delivered' && (
+                {selected.status !== 'delivered' && selected.status !== 'attempted' && (
                   <button onClick={async () => {
                     const now = new Date().toLocaleString('en-CA');
                     await updateOrderStatus(selected.id, 'delivered', { delivered_at: now, recipient_name: 'Admin' });
@@ -580,6 +583,25 @@ export default function AdminOrders() {
                     if (period !== 'today') setAllOrders(prev => prev.map(o => o.id === selected.id ? { ...o, status: 'delivered', delivered_at: now } : o));
                   }} className="btn btn-sm flex-1 justify-center" style={{background:'#0F6E56',color:'white'}}>
                     ✓ Mark delivered
+                  </button>
+                )}
+                {selected.status !== 'attempted' && selected.status !== 'delivered' && (
+                  <button onClick={async () => {
+                    const note = window.prompt('Reason for attempted delivery (optional):') || '';
+                    await updateOrderStatus(selected.id, 'attempted', { notes: note ? `[Attempted delivery] ${note}` : '[Attempted delivery]' });
+                    setSelected(prev => ({ ...prev, status: 'attempted' }));
+                    if (period !== 'today') setAllOrders(prev => prev.map(o => o.id === selected.id ? { ...o, status: 'attempted' } : o));
+                  }} className="btn btn-sm flex-1 justify-center" style={{background:'#FEF3C7',color:'#92400E',border:'0.5px solid #D97706'}}>
+                    ⚠️ Attempted
+                  </button>
+                )}
+                {selected.status === 'attempted' && (
+                  <button onClick={async () => {
+                    await updateOrderStatus(selected.id, 'waiting', {});
+                    setSelected(prev => ({ ...prev, status: 'waiting' }));
+                    if (period !== 'today') setAllOrders(prev => prev.map(o => o.id === selected.id ? { ...o, status: 'waiting' } : o));
+                  }} className="btn btn-sm flex-1 justify-center" style={{background:'var(--tn-gold)',color:'white'}}>
+                    ↺ Reschedule
                   </button>
                 )}
                 {(selected.status === 'enroute' || selected.status === 'picked') && (
