@@ -4,9 +4,9 @@ import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
-const STATUS_RANK  = { waiting:0, picked:1, enroute:2, delivered:3 };
-const STATUS_LABEL = { waiting:'Awaiting pickup', picked:'Picked up', enroute:'En route', delivered:'Delivered' };
-const STATUS_COLOR = { waiting:'badge-gray', picked:'badge-warning', enroute:'badge-info', delivered:'badge-success' };
+const STATUS_RANK  = { waiting:0, picked:1, enroute:2, delivered:3, attempted:2 };
+const STATUS_LABEL = { waiting:'Awaiting pickup', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
+const STATUS_COLOR = { waiting:'badge-gray', picked:'badge-warning', enroute:'badge-info', delivered:'badge-success', attempted:'badge-danger' };
 
 export default function DriverLocal() {
   const { driverId } = useParams();
@@ -32,6 +32,8 @@ export default function DriverLocal() {
   const [photoDataUrl,  setPhotoDataUrl]  = useState(null);
   const [photoFile,     setPhotoFile]     = useState(null);
   const [sigDataUrl,    setSigDataUrl]    = useState(null);
+  const [showAttempted, setShowAttempted] = useState(null);
+  const [attemptedNote, setAttemptedNote] = useState('');
   const sigCanvasRef = useRef(null);
   const locationInterval = useRef(null);
 
@@ -140,7 +142,21 @@ export default function DriverLocal() {
     setRecipientName('');
   };
 
-  const submitDelivery = async () => {
+  const submitAttempted = async () => {
+    await updateStatus(showAttempted, 'attempted', {
+      delivered_at: now(),
+      notes: attemptedNote ? `[Attempted delivery] ${attemptedNote}` : '[Attempted delivery]',
+    });
+    setActiveEnroute(null);
+    setShowAttempted(null);
+    setAttemptedNote('');
+    stopLocationSharing();
+  };
+
+  const openAttempted = (id) => {
+    setShowAttempted(id);
+    setAttemptedNote('');
+  };
     let photo_url = null;
     let signature_url = null;
 
@@ -380,10 +396,19 @@ export default function DriverLocal() {
                       </button>
                     )}
                     {order.status==='enroute'&&(
-                      <button onClick={()=>openProof(order.id)} className="btn btn-success btn-sm w-full justify-center">✓ Mark delivered</button>
+                      <div className="flex gap-2">
+                        <button onClick={()=>openProof(order.id)} className="btn btn-success btn-sm flex-1 justify-center">✓ Mark delivered</button>
+                        <button onClick={()=>openAttempted(order.id)} className="btn btn-sm flex-shrink-0 px-3"
+                          style={{background:'#FEF3C7',color:'#92400E',border:'0.5px solid #D97706'}}>
+                          ⚠️ Attempted
+                        </button>
+                      </div>
                     )}
                     {order.status==='delivered'&&(
                       <p className="text-xs font-medium text-center" style={{color:'#0F6E56'}}>✓ Delivered at {order.delivered_at}</p>
+                    )}
+                    {order.status==='attempted'&&(
+                      <p className="text-xs font-medium text-center" style={{color:'#92400E'}}>⚠️ Attempted delivery</p>
                     )}
                   </div>
                 </div>
@@ -411,6 +436,35 @@ export default function DriverLocal() {
           </div>
         )}
       </div>
+
+      {/* Attempted delivery modal */}
+      {showAttempted && (
+        <div className="fixed inset-0 flex items-end z-50" style={{background:'rgba(26,18,8,0.6)'}}>
+          <div className="w-full rounded-t-2xl p-5 max-w-lg mx-auto" style={{background:'var(--tn-cream)'}}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{background:'var(--tn-border-strong)'}}/>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">⚠️ Attempted delivery</h2>
+              <button onClick={()=>setShowAttempted(null)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
+            </div>
+            <div className="rounded-xl p-3 mb-4" style={{background:'#FEF3C7',border:'0.5px solid #D97706'}}>
+              <p className="text-sm" style={{color:'#92400E'}}>The recipient was not available. This order will be marked as attempted delivery. You will still be charged for this delivery.</p>
+            </div>
+            <div className="mb-4">
+              <label className="label">Reason / note (optional)</label>
+              <textarea className="input" rows={3} style={{resize:'none'}}
+                placeholder="e.g. No one answered the door, left notice..."
+                value={attemptedNote} onChange={e=>setAttemptedNote(e.target.value)}/>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={()=>setShowAttempted(null)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+              <button onClick={submitAttempted} className="btn flex-1 justify-center"
+                style={{background:'#D97706',color:'white'}}>
+                ⚠️ Confirm attempted
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Proof modal */}
       {showProof&&(
