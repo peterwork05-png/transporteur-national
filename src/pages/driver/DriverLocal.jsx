@@ -157,6 +157,8 @@ export default function DriverLocal() {
     setShowAttempted(id);
     setAttemptedNote('');
   };
+
+  const submitDelivery = async () => {
     let photo_url = null;
     let signature_url = null;
 
