@@ -26,7 +26,8 @@ export function generateProofHTML(order) {
   <table width="100%" style="margin-bottom:32px">
     <tr>
       <td>
-        <div style="font-size:26px;font-weight:bold">🦅 TRANSPORTEUR NATIONAL MC INC.</div>
+        <img src="https://res.cloudinary.com/yty6xjdu/image/upload/v1785448615/Screenshot_2026-07-30_at_5.56.37_PM_spalh4.png" style="height:60px;width:auto;object-fit:contain" alt="Transporteur National MC INC." />
+<div style="font-size:16px;font-weight:bold;color:#1A1208;margin-top:4px">TRANSPORTEUR NATIONAL MC INC.</div>
         <div style="font-size:11px;color:#666;margin-top:6px;line-height:1.8">
           3405 Rue de la licorne, Terrebonne, Quebec J6X 3Z7<br>
           1-800-410-5330 · transporteurnationalmc@gmail.com
