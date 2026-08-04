@@ -20,7 +20,7 @@ export function AdminDrivers() {
   const todayDate = new Date().toISOString().split('T')[0];
   const todayOrders = orders.filter(o => o.date?.split('T')[0] === todayDate);
 
-  const [mode,       setMode]       = useState(null); // null | 'edit' | 'add'
+  const [mode,       setMode]       = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [saving,     setSaving]     = useState(false);
   const [showDelete, setShowDelete] = useState(null);
@@ -141,104 +141,62 @@ export function AdminDrivers() {
         )}
       </div>
 
-      {/* Edit / Add modal — inline JSX, no sub-component */}
       {isOpen && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={closeModal}>
           <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[90vh] overflow-y-auto"
             style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
-
             <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
               <p className="font-semibold" style={{color:'var(--tn-cream)'}}>
                 {mode === 'edit' ? `Edit — ${editTarget?.name}` : 'Add new driver'}
               </p>
               <button onClick={closeModal} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
             </div>
-
             <div className="p-5 space-y-4">
-              {/* Avatar preview */}
               <div className="flex justify-center">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-md"
                   style={{background: color}}>
                   {initials || autoInitials(name) || '?'}
                 </div>
               </div>
-
-              {/* Name */}
               <div>
                 <label className="label">Full name</label>
-                <input
-                  className="input"
-                  placeholder="e.g. Marc Dumont"
-                  value={name}
-                  onChange={e => {
-                    setName(e.target.value);
-                    setInitials(autoInitials(e.target.value));
-                  }}
-                />
+                <input className="input" placeholder="e.g. Marc Dumont" value={name}
+                  onChange={e => { setName(e.target.value); setInitials(autoInitials(e.target.value)); }} />
               </div>
-
-              {/* Initials */}
               <div>
                 <label className="label">Initials</label>
-                <input
-                  className="input"
-                  placeholder="e.g. MD"
-                  maxLength={2}
-                  value={initials}
-                  onChange={e => setInitials(e.target.value.toUpperCase())}
-                />
+                <input className="input" placeholder="e.g. MD" maxLength={2} value={initials}
+                  onChange={e => setInitials(e.target.value.toUpperCase())} />
               </div>
-
-              {/* Role */}
               <div>
                 <label className="label">Route / Role</label>
                 <select className="input" value={role} onChange={e => setRole(e.target.value)}>
                   {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-
-              {/* PIN */}
               <div>
                 <label className="label">4-digit PIN</label>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="e.g. 1234"
-                  value={pin}
-                  onChange={e => setPin(e.target.value.slice(0, 4))}
-                />
+                <input className="input" type="number" placeholder="e.g. 1234" value={pin}
+                  onChange={e => setPin(e.target.value.slice(0, 4))} />
                 <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Driver uses this to log in</p>
               </div>
-
-              {/* Color */}
               <div>
                 <label className="label">Avatar color</label>
                 <div className="flex gap-2 flex-wrap">
                   {DRIVER_COLORS.map(c => (
                     <button key={c} onClick={() => setColor(c)}
                       className="w-8 h-8 rounded-full transition-all"
-                      style={{
-                        background: c,
-                        outline: color === c ? `3px solid ${c}` : 'none',
-                        outlineOffset: '2px',
-                        transform: color === c ? 'scale(1.2)' : 'scale(1)',
-                      }} />
+                      style={{background: c, outline: color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px', transform: color === c ? 'scale(1.2)' : 'scale(1)'}} />
                   ))}
                 </div>
               </div>
-
-              {/* Buttons */}
               <div className="flex gap-2 pt-2">
                 <button onClick={closeModal} className="btn btn-outline flex-1 justify-center">Cancel</button>
                 {mode === 'edit' && (
                   <button onClick={() => setShowDelete(editTarget)}
-                    className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
-                    🗑
-                  </button>
+                    className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>🗑</button>
                 )}
-                <button
-                  onClick={mode === 'edit' ? handleSave : handleAdd}
-                  disabled={!canSave}
+                <button onClick={mode === 'edit' ? handleSave : handleAdd} disabled={!canSave}
                   className="btn flex-1 justify-center"
                   style={{background:'var(--tn-red)',color:'white',opacity:canSave?1:0.5}}>
                   {saving ? 'Saving...' : 'Save'}
@@ -249,7 +207,6 @@ export function AdminDrivers() {
         </div>
       )}
 
-      {/* Delete confirmation */}
       {showDelete && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6" style={{background:'var(--tn-cream)'}}>
@@ -272,22 +229,20 @@ export function AdminDrivers() {
 }
 
 export function AdminSettings() {
-  const [clients,       setClients]       = useState([]);
-  const [loadingClients,setLoadingClients]= useState(true);
-  const [showAdd,       setShowAdd]       = useState(false);
-  const [newClient,     setNewClient]     = useState({ name:'', email:'', password:'', role:'ops', client_group:'' });
-  const [showPasswords, setShowPasswords] = useState({});
-  const [saving,        setSaving]        = useState(false);
-  const [editClient,    setEditClient]    = useState(null);
+  const [clients,        setClients]        = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [showAdd,        setShowAdd]        = useState(false);
+  const [newClient,      setNewClient]      = useState({ name:'', email:'', password:'', role:'ops', client_group:'' });
+  const [showPasswords,  setShowPasswords]  = useState({});
+  const [saving,         setSaving]         = useState(false);
 
-  // Admin PIN
-  const [showPinModal,  setShowPinModal]  = useState(false);
-  const [currentPin,    setCurrentPin]    = useState('');
-  const [newPin,        setNewPin]        = useState('');
-  const [confirmPin,    setConfirmPin]    = useState('');
-  const [pinError,      setPinError]      = useState('');
-  const [pinSuccess,    setPinSuccess]    = useState(false);
-  const [adminPin,      setAdminPin]      = useState('••••');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [currentPin,   setCurrentPin]   = useState('');
+  const [newPin,       setNewPin]       = useState('');
+  const [confirmPin,   setConfirmPin]   = useState('');
+  const [pinError,     setPinError]     = useState('');
+  const [pinSuccess,   setPinSuccess]   = useState(false);
+  const [adminPin,     setAdminPin]     = useState('••••');
 
   const togglePass = (id) => setShowPasswords(p => ({...p, [id]: !p[id]}));
 
@@ -364,7 +319,6 @@ export function AdminSettings() {
     } catch(e) { setPinError('Error changing PIN'); }
   };
 
-  // Group clients by client_group
   const grouped = clients.reduce((acc, c) => {
     const group = c.client_group || c.id;
     if (!acc[group]) acc[group] = { name: c.name, logins: [] };
@@ -372,7 +326,6 @@ export function AdminSettings() {
     return acc;
   }, {});
 
-  // Unique company groups for dropdown
   const companyGroups = Object.entries(grouped).map(([group, { name }]) => ({ group, name }));
 
   return (
@@ -404,7 +357,7 @@ export function AdminSettings() {
         <div className="flex items-center justify-between p-4" style={{borderBottom:'0.5px solid var(--tn-border)'}}>
           <div>
             <h2 className="font-semibold text-sm">Client portal logins</h2>
-            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Manage who can access the client portal and what they see</p>
+            <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Manage who can access the client portal</p>
           </div>
           <button onClick={() => setShowAdd(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ Add</button>
         </div>
@@ -418,7 +371,6 @@ export function AdminSettings() {
             <p className="font-semibold text-sm mb-3" style={{color:'var(--tn-dark)'}}>{name}</p>
             {logins.map(client => (
               <div key={client.id} className="mb-3 last:mb-0 rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
-                {/* Email row */}
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium truncate flex-1">{client.email}</p>
                   <button onClick={() => handleDisable(client.id)}
@@ -427,8 +379,6 @@ export function AdminSettings() {
                     Disable
                   </button>
                 </div>
-
-                {/* Password row */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <p className="text-xs" style={{color:'var(--tn-gold)'}}>Password:</p>
@@ -438,27 +388,17 @@ export function AdminSettings() {
                     {showPasswords[client.id] ? 'Hide' : 'Show'}
                   </button>
                 </div>
-
-                {/* Access level toggle */}
                 <div>
                   <p className="text-xs mb-1.5" style={{color:'var(--tn-gold)'}}>Access level</p>
                   <div className="flex gap-1 p-1 rounded-xl" style={{background:'rgba(139,105,20,0.08)',width:'fit-content'}}>
-                    <button
-                      onClick={() => handleUpdateRole(client.id, 'ops')}
+                    <button onClick={() => handleUpdateRole(client.id, 'ops')}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        background: client.role === 'ops' ? 'var(--tn-red)' : 'transparent',
-                        color: client.role === 'ops' ? 'white' : 'var(--tn-gold)',
-                      }}>
+                      style={{background: client.role === 'ops' ? 'var(--tn-red)' : 'transparent', color: client.role === 'ops' ? 'white' : 'var(--tn-gold)'}}>
                       📦 Orders only
                     </button>
-                    <button
-                      onClick={() => handleUpdateRole(client.id, 'finance')}
+                    <button onClick={() => handleUpdateRole(client.id, 'finance')}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        background: client.role === 'finance' ? 'var(--tn-red)' : 'transparent',
-                        color: client.role === 'finance' ? 'white' : 'var(--tn-gold)',
-                      }}>
+                      style={{background: client.role === 'finance' ? 'var(--tn-red)' : 'transparent', color: client.role === 'finance' ? 'white' : 'var(--tn-gold)'}}>
                       💳 Orders + Invoices
                     </button>
                   </div>
@@ -467,36 +407,45 @@ export function AdminSettings() {
             ))}
           </div>
         ))}
+      </div>
 
-        {/* Add new client form */}
-        {showAdd && (
-          <div className="p-4" style={{background:'var(--tn-warm)'}}>
-            <p className="font-medium text-sm mb-3">New client login</p>
-            <div className="space-y-2">
+      {/* Add client modal */}
+      {showAdd && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}
+          onClick={() => setShowAdd(false)}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
+            style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>New client login</p>
+              <button onClick={() => setShowAdd(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-3">
               <div>
                 <label className="label">Client company</label>
-                <div className="flex gap-2">
-                  <select className="input flex-1" value={newClient.client_group}
-                    onChange={e => {
-                      const g = e.target.value;
-                      const found = companyGroups.find(c => c.group === g);
-                      setNewClient(c => ({...c, client_group: g, name: found?.name || c.name}));
-                    }}>
-                    <option value="">— New company —</option>
-                    {companyGroups.map(cg => <option key={cg.group} value={cg.group}>{cg.name}</option>)}
-                  </select>
-                </div>
+                <select className="input" value={newClient.client_group}
+                  onChange={e => {
+                    const g = e.target.value;
+                    const found = companyGroups.find(c => c.group === g);
+                    setNewClient(c => ({...c, client_group: g, name: found?.name || c.name}));
+                  }}>
+                  <option value="">— New company —</option>
+                  {companyGroups.map(cg => <option key={cg.group} value={cg.group}>{cg.name}</option>)}
+                </select>
                 {!newClient.client_group && (
                   <input className="input mt-2" placeholder="Company name (e.g. Jonarts Printing)"
                     value={newClient.name} onChange={e=>setNewClient(c=>({...c,name:e.target.value}))} />
                 )}
               </div>
-              <div><label className="label">Email</label>
+              <div>
+                <label className="label">Email</label>
                 <input type="email" className="input" placeholder="client@company.com"
-                  value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} /></div>
-              <div><label className="label">Password</label>
+                  value={newClient.email} onChange={e=>setNewClient(c=>({...c,email:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Password</label>
                 <input className="input" placeholder="Set a password"
-                  value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} /></div>
+                  value={newClient.password} onChange={e=>setNewClient(c=>({...c,password:e.target.value}))} />
+              </div>
               <div>
                 <label className="label">Access level</label>
                 <div className="flex gap-1 p-1 rounded-xl" style={{background:'rgba(139,105,20,0.08)',width:'fit-content'}}>
@@ -509,17 +458,18 @@ export function AdminSettings() {
                   ))}
                 </div>
               </div>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => setShowAdd(false)} className="btn btn-outline btn-sm flex-1 justify-center">Cancel</button>
-              <button onClick={handleAddClient} disabled={saving}
-                className="btn btn-sm flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                {saving ? 'Creating...' : 'Create login'}
-              </button>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowAdd(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                <button onClick={handleAddClient} disabled={saving || !newClient.name || !newClient.email || !newClient.password}
+                  className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white',
+                  opacity: saving||!newClient.name||!newClient.email||!newClient.password ? 0.5 : 1}}>
+                  {saving ? 'Creating...' : 'Create login'}
+                </button>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Change PIN modal */}
       {showPinModal && (
