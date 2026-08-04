@@ -25,10 +25,9 @@ export default function AdminOrders() {
   const [loading7,  setLoading7]  = useState(false);
   const [deleting,  setDeleting]  = useState(false);
 
-  // Multi-select state
-  const [selectedIds,   setSelectedIds]   = useState(new Set());
-  const [selectMode,    setSelectMode]    = useState(false);
-  const [bulkDeleting,  setBulkDeleting]  = useState(false);
+  const [selectedIds,  setSelectedIds]  = useState(new Set());
+  const [selectMode,   setSelectMode]   = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     if (period === '7days' || period === 'all') {
@@ -73,11 +72,11 @@ export default function AdminOrders() {
   });
 
   const TABS = [
-    { label:`All (${displayOrders.length})`,                                                              val:'All' },
-    { label:`Unassigned (${displayOrders.filter(o=>!o.driver&&!o.driver_id).length})`,                   val:'Unassigned' },
-    { label:`Active (${displayOrders.filter(o=>['waiting','picked','enroute'].includes(o.status)).length})`, val:'Active' },
-    { label:`Delivered (${displayOrders.filter(o=>o.status==='delivered').length})`,                      val:'Delivered' },
-    { label:`Attempted (${displayOrders.filter(o=>o.status==='attempted').length})`,                      val:'Attempted' },
+    { label:`All (${displayOrders.length})`,                                                                  val:'All' },
+    { label:`Unassigned (${displayOrders.filter(o=>!o.driver&&!o.driver_id).length})`,                       val:'Unassigned' },
+    { label:`Active (${displayOrders.filter(o=>['waiting','picked','enroute'].includes(o.status)).length})`,  val:'Active' },
+    { label:`Delivered (${displayOrders.filter(o=>o.status==='delivered').length})`,                          val:'Delivered' },
+    { label:`Attempted (${displayOrders.filter(o=>o.status==='attempted').length})`,                          val:'Attempted' },
   ];
 
   const clientName = (o) => o.clientName || o.client_name || o.to_business_name || o.billing_name || CLIENTS[o.client]?.name || o.client || '—';
@@ -92,9 +91,7 @@ export default function AdminOrders() {
         body: JSON.stringify({ driver_id: driverId }),
       });
       if (period === 'today') await fetchOrders();
-      else {
-        setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, driver: driverId } : o));
-      }
+      else setAllOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, driver: driverId } : o));
       const fullDriver = drivers.find(d => d.id === driverId);
       setSelected(prev => prev ? {
         ...prev,
@@ -125,9 +122,7 @@ export default function AdminOrders() {
     if (!window.confirm(`Delete ${selectedIds.size} orders? This cannot be undone.`)) return;
     setBulkDeleting(true);
     try {
-      await Promise.all([...selectedIds].map(id =>
-        fetch(`/api/orders/${id}`, { method: 'DELETE' })
-      ));
+      await Promise.all([...selectedIds].map(id => fetch(`/api/orders/${id}`, { method: 'DELETE' })));
       if (period === 'today') await fetchOrders();
       else setAllOrders(prev => prev.filter(o => !selectedIds.has(o.id)));
       setSelectedIds(new Set());
@@ -146,11 +141,8 @@ export default function AdminOrders() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map(o => o.id)));
-    }
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(o => o.id)));
   };
 
   const localDrivers = drivers.filter(d => d.role === 'local');
@@ -177,43 +169,33 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* Bulk actions bar */}
       {selectMode && (
         <div className="flex items-center gap-3 mb-4 p-3 rounded-xl" style={{background:'var(--tn-warm)'}}>
           <button onClick={toggleSelectAll} className="btn btn-outline btn-sm text-xs">
             {selectedIds.size === filtered.length ? '☑ Deselect all' : '☐ Select all'}
           </button>
-          <span className="text-sm" style={{color:'var(--tn-gold)'}}>
-            {selectedIds.size} selected
-          </span>
+          <span className="text-sm" style={{color:'var(--tn-gold)'}}>{selectedIds.size} selected</span>
           {selectedIds.size > 0 && (
             <button onClick={handleBulkDelete} disabled={bulkDeleting}
-              className="btn btn-sm ml-auto"
-              style={{background:'#991B1B', color:'white', opacity:bulkDeleting?0.6:1}}>
+              className="btn btn-sm ml-auto" style={{background:'#991B1B', color:'white', opacity:bulkDeleting?0.6:1}}>
               {bulkDeleting ? '⏳ Deleting...' : `🗑 Delete ${selectedIds.size}`}
             </button>
           )}
         </div>
       )}
 
-      {/* Period toggle */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <div className="flex p-1 rounded-xl" style={{background:'var(--tn-warm)'}}>
           {[['today','📅 Today'],['7days','📆 Last 7 days'],['all','📂 All orders']].map(([val,label])=>(
             <button key={val} onClick={()=>{ setPeriod(val); setTab('All'); setSelectedIds(new Set()); }}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-              style={{
-                background: period===val ? 'white' : 'transparent',
-                color: period===val ? 'var(--tn-dark)' : 'var(--tn-gold)',
-                boxShadow: period===val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              }}>
+              style={{background: period===val ? 'white' : 'transparent', color: period===val ? 'var(--tn-dark)' : 'var(--tn-gold)', boxShadow: period===val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}}>
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Date range filter */}
       {period === 'all' && (
         <div className="flex gap-2 mb-4 items-center flex-wrap">
           <div>
@@ -230,7 +212,6 @@ export default function AdminOrders() {
         </div>
       )}
 
-      {/* Status tabs */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {TABS.map(t => (
           <button key={t.val} onClick={() => setTab(t.val)}
@@ -241,13 +222,10 @@ export default function AdminOrders() {
         ))}
       </div>
 
-      {loading7 && (
-        <div className="text-center py-8" style={{color:'var(--tn-gold)'}}>Loading orders...</div>
-      )}
+      {loading7 && <div className="text-center py-8" style={{color:'var(--tn-gold)'}}>Loading orders...</div>}
 
       {!loading7 && (
         <>
-          {/* Desktop table */}
           <div className="card overflow-hidden hidden md:block">
             <table className="w-full">
               <thead>
@@ -279,9 +257,7 @@ export default function AdminOrders() {
                       <td className="px-4 py-3 font-mono text-xs" style={{color:'var(--tn-red)'}}>{order.id}</td>
                       <td className="px-4 py-3 text-sm font-medium">{clientName(order)}</td>
                       <td className="px-4 py-3 text-sm max-w-xs truncate" style={{color:'var(--tn-gold)'}}>{order.address}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {hasDriver ? driverName(order) : <span className="badge badge-danger">Unassigned</span>}
-                      </td>
+                      <td className="px-4 py-3 text-sm">{hasDriver ? driverName(order) : <span className="badge badge-danger">Unassigned</span>}</td>
                       <td className="px-4 py-3 text-sm">{order.boxes}</td>
                       <td className="px-4 py-3 text-sm font-semibold">${parseFloat(order.amount||0).toFixed(2)}</td>
                       <td className="px-4 py-3"><span className={`badge ${b.cls}`}>{b.label}</span></td>
@@ -291,16 +267,11 @@ export default function AdminOrders() {
                 })}
               </tbody>
             </table>
-            {filtered.length === 0 && (
-              <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>
-            )}
+            {filtered.length === 0 && <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>}
           </div>
 
-          {/* Mobile cards */}
           <div className="space-y-2 md:hidden">
-            {filtered.length === 0 && (
-              <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>
-            )}
+            {filtered.length === 0 && <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No orders found</div>}
             {filtered.map(order => {
               const b = STATUS_BADGE[order.status] || STATUS_BADGE.waiting;
               const hasDriver = order.driver || order.driver_id;
@@ -339,7 +310,6 @@ export default function AdminOrders() {
         </>
       )}
 
-      {/* Order detail modal */}
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
           <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
@@ -357,7 +327,6 @@ export default function AdminOrders() {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Assign driver */}
               <div className="rounded-xl p-4" style={{background:selected.driver||selected.driver_id?'#E8F5EF':'#FEF3C7', border:`0.5px solid ${selected.driver||selected.driver_id?'#0F6E56':'#D97706'}`}}>
                 <p className="text-xs font-medium mb-2" style={{color:selected.driver||selected.driver_id?'#0F6E56':'#92400E'}}>
                   {selected.driver||selected.driver_id?'✅ Assigned driver':'⚠️ No driver assigned'}
@@ -389,7 +358,6 @@ export default function AdminOrders() {
                 )}
               </div>
 
-              {/* FROM */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>📦 From — Pickup</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -416,7 +384,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* TO */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>🚚 To — Delivery</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -441,7 +408,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Order details */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-semibold mb-3 uppercase tracking-wide" style={{color:'var(--tn-red)'}}>📋 Order details</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -461,7 +427,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Notes */}
               {selected.notes && (
                 <div className="rounded-xl p-3" style={{background:'#FEF3C7', border:'0.5px solid #D97706'}}>
                   <p className="text-xs mb-1 font-medium" style={{color:'#92400E'}}>📝 Delivery notes</p>
@@ -473,7 +438,6 @@ export default function AdminOrders() {
                 </div>
               )}
 
-              {/* Timeline */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Delivery timeline</p>
                 <div className="space-y-2">
@@ -531,7 +495,6 @@ export default function AdminOrders() {
                       ))}
                     </div>
                   )}
-                  {/* Upload proof */}
                   <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
                     <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>📤 Upload proof of delivery</p>
                     <input type="file" accept="image/*" id="proof-upload" className="hidden"
@@ -566,6 +529,11 @@ export default function AdminOrders() {
                     <label htmlFor="proof-upload" className="btn btn-outline btn-sm w-full justify-center cursor-pointer text-xs">
                       📷 {selected.photo_url ? 'Replace photo proof' : 'Upload photo proof'}
                     </label>
+                    <a href={`/api/orders/${selected.id}/proof-pdf`} target="_blank" rel="noreferrer"
+                      className="btn btn-sm w-full justify-center text-xs mt-2"
+                      style={{background:'var(--tn-red)', color:'white', display:'block', textAlign:'center'}}>
+                      ⬇ Download proof of delivery
+                    </a>
                   </div>
                 </div>
               )}
