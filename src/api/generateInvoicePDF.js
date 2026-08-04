@@ -51,7 +51,7 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
   <table width="100%" style="margin-bottom:40px">
     <tr>
       <td style="vertical-align:top">
-        <div style="font-size:28px;font-weight:bold;color:#1A1208;letter-spacing:1px">🦅</div>
+        <img src="https://res.cloudinary.com/yty6xjdu/image/upload/v1785448615/Screenshot_2026-07-30_at_5.56.37_PM_spalh4.png" style="height:70px;width:auto;object-fit:contain" alt="Transporteur National MC INC." />
         <div style="font-size:16px;font-weight:bold;color:#1A1208;margin-top:4px">TRANSPORTEUR NATIONAL MC INC.</div>
         <div style="font-size:11px;color:#666;margin-top:8px;line-height:1.8">
           No. d'entreprise 1179231510<br>
