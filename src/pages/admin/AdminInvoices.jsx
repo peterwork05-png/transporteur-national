@@ -123,6 +123,62 @@ export default function AdminInvoices() {
   const [editEmailNote,    setEditEmailNote]    = useState('');
   const [showEmailBody,    setShowEmailBody]    = useState(false);
 
+  // Invoice orders management
+  const [invoiceOrders,     setInvoiceOrders]     = useState([]);
+  const [loadingOrders,     setLoadingOrders]     = useState(false);
+  const [showAddOrder,      setShowAddOrder]      = useState(false);
+  const [addOrderSearch,    setAddOrderSearch]    = useState('');
+  const [addOrderResults,   setAddOrderResults]   = useState([]);
+  const [addingOrder,       setAddingOrder]       = useState(false);
+
+  const fetchInvoiceOrders = async (invoiceId) => {
+    setLoadingOrders(true);
+    try {
+      const res  = await fetch(`/api/invoices/${invoiceId}/orders`);
+      const data = await res.json();
+      setInvoiceOrders(data.orders || []);
+    } catch(e) { console.error(e); }
+    setLoadingOrders(false);
+  };
+
+  const handleRemoveOrder = async (orderId) => {
+    if (!window.confirm('Remove this order from the invoice? Totals will recalculate.')) return;
+    try {
+      await fetch(`/api/invoices/${selected.id}/orders/${orderId}`, { method: 'DELETE' });
+      await fetchInvoiceOrders(selected.id);
+      await fetchInvoices();
+      setSelected(prev => prev ? { ...prev } : null);
+    } catch(e) { console.error(e); }
+  };
+
+  const handleSearchOrders = async (q) => {
+    setAddOrderSearch(q);
+    if (!q || q.length < 2) { setAddOrderResults([]); return; }
+    try {
+      const res  = await fetch(`/api/orders/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setAddOrderResults(data.filter(o => !invoiceOrders.find(io => io.id === o.id)));
+    } catch(e) { console.error(e); }
+  };
+
+  const handleAddOrder = async (orderId) => {
+    setAddingOrder(true);
+    try {
+      await fetch(`/api/invoices/${selected.id}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      await fetchInvoiceOrders(selected.id);
+      await fetchInvoices();
+      setSelected(prev => prev ? { ...prev } : null);
+      setAddOrderSearch('');
+      setAddOrderResults([]);
+      setShowAddOrder(false);
+    } catch(e) { console.error(e); }
+    setAddingOrder(false);
+  };
+
   const handlePreviewEmail = async () => {
     try {
       const res  = await fetch(`/api/invoices/${selected.id}/email-preview`);
@@ -269,7 +325,7 @@ export default function AdminInvoices() {
           </thead>
           <tbody>
             {filtered.map((inv, i) => (
-              <tr key={inv.id} onClick={() => setSelected(inv)}
+              <tr key={inv.id} onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id); else setInvoiceOrders([]); }}
                 className="cursor-pointer hover:opacity-80"
                 style={{borderBottom:'0.5px solid var(--tn-border)', background:i%2===0?'white':'var(--tn-cream)'}}>
                 <td className="px-4 py-3 font-mono text-sm font-semibold" style={{color:'var(--tn-red)'}}>#{inv.id}</td>
@@ -302,7 +358,7 @@ export default function AdminInvoices() {
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {filtered.map(inv => (
-          <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => setSelected(inv)}>
+          <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id); else setInvoiceOrders([]); }}>
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
@@ -425,6 +481,70 @@ export default function AdminInvoices() {
                     <p className="text-xs font-medium" style={{color:'#0F6E56'}}>Payment received</p>
                     <p className="text-sm font-semibold" style={{color:'#0F6E56'}}>EFT #{selected.eft}</p>
                   </div>
+                </div>
+              )}
+
+              {/* Orders included — local invoices only */}
+              {selected.type === 'local' && (
+                <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium" style={{color:'var(--tn-gold)'}}>📦 Orders included</p>
+                    <button onClick={() => setShowAddOrder(true)}
+                      className="btn btn-sm text-xs" style={{background:'var(--tn-red)',color:'white'}}>
+                      + Add order
+                    </button>
+                  </div>
+                  {loadingOrders ? (
+                    <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>Loading...</p>
+                  ) : invoiceOrders.length === 0 ? (
+                    <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>No orders linked</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {invoiceOrders.map(order => (
+                        <div key={order.id} className="flex items-center gap-2 p-2 rounded-lg" style={{background:'white'}}>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-mono text-xs" style={{color:'var(--tn-red)'}}>{order.id}</p>
+                            <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{order.address}</p>
+                          </div>
+                          <p className="text-xs font-semibold flex-shrink-0">${parseFloat(order.amount||0).toFixed(2)}</p>
+                          <button onClick={() => handleRemoveOrder(order.id)}
+                            className="text-xs flex-shrink-0 px-2 py-1 rounded"
+                            style={{background:'#FEE2E2',color:'#991B1B'}}>
+                            ❌
+                          </button>
+                        </div>
+                      ))}
+                      <p className="text-xs text-right font-medium pt-1" style={{color:'var(--tn-gold)'}}>
+                        {invoiceOrders.length} orders · Totals auto-recalculate
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Add order modal */}
+              {showAddOrder && (
+                <div className="rounded-xl p-4" style={{background:'#EFF6FF', border:'0.5px solid #185FA5'}}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium" style={{color:'#185FA5'}}>Search order to add</p>
+                    <button onClick={() => { setShowAddOrder(false); setAddOrderSearch(''); setAddOrderResults([]); }}
+                      className="text-xs" style={{color:'#185FA5'}}>✕ Cancel</button>
+                  </div>
+                  <input className="input mb-2" placeholder="Search by order ID, address..."
+                    value={addOrderSearch} onChange={e => handleSearchOrders(e.target.value)} />
+                  {addOrderResults.length > 0 && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {addOrderResults.map(o => (
+                        <button key={o.id} onClick={() => handleAddOrder(o.id)} disabled={addingOrder}
+                          className="w-full text-left p-2 rounded-lg text-xs"
+                          style={{background:'white',border:'0.5px solid #185FA5'}}>
+                          <span className="font-mono" style={{color:'var(--tn-red)'}}>{o.id}</span>
+                          <span className="ml-2" style={{color:'var(--tn-gold)'}}>{o.address}</span>
+                          <span className="float-right font-semibold">${parseFloat(o.amount||0).toFixed(2)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
