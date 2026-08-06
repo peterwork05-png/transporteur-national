@@ -1209,6 +1209,105 @@ router.get('/stats/dashboard', async (req, res) => {
     res.json({ ...rows[0], top_clients: topClients });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Get orders linked to an invoice
+router.get('/invoices/:id/orders', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoice_orders (
+        invoice_id INTEGER, order_id VARCHAR(100),
+        PRIMARY KEY (invoice_id, order_id)
+      )
+    `);
+    // Check if invoice has explicit orders linked
+    const { rows: linked } = await pool.query(
+      `SELECT order_id FROM invoice_orders WHERE invoice_id = $1`,
+      [req.params.id]
+    );
+    if (linked.length > 0) {
+      // Return explicitly linked orders
+      const ids = linked.map(r => r.order_id);
+      const { rows } = await pool.query(
+        `SELECT o.*, c.name as client_name FROM orders o LEFT JOIN clients c ON o.client_id = c.id WHERE o.id = ANY($1)`,
+        [ids]
+      );
+      return res.json({ orders: rows, explicit: true });
+    }
+    // Fall back to date range query
+    const { rows: invRows } = await pool.query(
+      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (invRows.length === 0) return res.json({ orders: [], explicit: false });
+    const inv = invRows[0];
+    const { rows } = await pool.query(`
+      SELECT o.*, c.name as client_name FROM orders o
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE c.client_group = $1 AND o.status = 'delivered'
+        AND o.date >= $2 AND o.date <= $3
+      ORDER BY o.date ASC
+    `, [inv.client_group, inv.date_from, inv.date_to]);
+    res.json({ orders: rows, explicit: false });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add order to invoice
+router.post('/invoices/:id/orders', async (req, res) => {
+  try {
+    const { order_id } = req.body;
+    await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
+    
+    // Get current orders for this invoice (explicit or from date range)
+    const existingRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/invoices/${req.params.id}/orders`);
+    const existing = await existingRes.json();
+    
+    // If not yet explicit, copy current date-range orders to invoice_orders first
+    if (!existing.explicit) {
+      for (const o of existing.orders) {
+        await pool.query(`INSERT INTO invoice_orders VALUES ($1,$2) ON CONFLICT DO NOTHING`, [req.params.id, o.id]);
+      }
+    }
+    // Add the new order
+    await pool.query(`INSERT INTO invoice_orders VALUES ($1,$2) ON CONFLICT DO NOTHING`, [req.params.id, order_id]);
+    
+    // Recalculate totals
+    await recalcInvoice(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Remove order from invoice
+router.delete('/invoices/:id/orders/:order_id', async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
+    
+    const existingRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/invoices/${req.params.id}/orders`);
+    const existing = await existingRes.json();
+    
+    if (!existing.explicit) {
+      for (const o of existing.orders) {
+        await pool.query(`INSERT INTO invoice_orders VALUES ($1,$2) ON CONFLICT DO NOTHING`, [req.params.id, o.id]);
+      }
+    }
+    await pool.query(`DELETE FROM invoice_orders WHERE invoice_id=$1 AND order_id=$2`, [req.params.id, req.params.order_id]);
+    await recalcInvoice(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Helper to recalculate invoice totals
+async function recalcInvoice(invoiceId) {
+  const { rows } = await pool.query(`
+    SELECT o.amount FROM orders o
+    INNER JOIN invoice_orders io ON o.id = io.order_id
+    WHERE io.invoice_id = $1
+  `, [invoiceId]);
+  const subtotal = rows.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const tps   = subtotal * 0.05;
+  const tvq   = subtotal * 0.09975;
+  const total = subtotal + tps + tvq;
+  await pool.query(`UPDATE invoices SET subtotal=$1, tps=$2, tvq=$3, total=$4 WHERE id=$5`,
+    [subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2), invoiceId]);
+}
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
