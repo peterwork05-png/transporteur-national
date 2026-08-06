@@ -966,6 +966,23 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Edit order fields
+router.patch('/orders/:id/edit', async (req, res) => {
+  try {
+    const { address, boxes, amount, date, driver_id } = req.body;
+    const { rows } = await pool.query(`
+      UPDATE orders SET
+        address   = COALESCE($1, address),
+        boxes     = COALESCE($2, boxes),
+        amount    = COALESCE($3, amount),
+        date      = COALESCE($4, date),
+        driver_id = $5,
+        updated_at = NOW()
+      WHERE id = $6 RETURNING *
+    `, [address, boxes, amount, date, driver_id || null, req.params.id]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 // Delete order
 router.delete('/orders/:id', async (req, res) => {
   try {
