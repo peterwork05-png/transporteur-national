@@ -29,6 +29,89 @@ export default function AdminOrders() {
   const [selectMode,   setSelectMode]   = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Edit / Create order
+  const [showEdit,   setShowEdit]   = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [editForm,   setEditForm]   = useState({});
+  const [createForm, setCreateForm] = useState({
+    id: '', address: '', boxes: 1, amount: '', date: new Date().toISOString().split('T')[0],
+    notes: '', driver_id: '', status: 'waiting',
+  });
+
+  const openEdit = (order) => {
+    setEditForm({
+      address:   order.address || '',
+      boxes:     order.boxes || 1,
+      amount:    order.amount || '',
+      date:      order.date ? String(order.date).split('T')[0] : '',
+      notes:     order.notes || '',
+      driver_id: order.driver_id || order.driver || '',
+      status:    order.status || 'waiting',
+    });
+    setShowEdit(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/orders/${selected.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status:    editForm.status,
+          notes:     editForm.notes,
+        }),
+      });
+      // Update address, boxes, amount, date via a new endpoint
+      await fetch(`/api/orders/${selected.id}/edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address:   editForm.address,
+          boxes:     editForm.boxes,
+          amount:    editForm.amount,
+          date:      editForm.date,
+          driver_id: editForm.driver_id || null,
+        }),
+      });
+      if (period === 'today') await fetchOrders();
+      else {
+        setAllOrders(prev => prev.map(o => o.id === selected.id ? {
+          ...o, ...editForm,
+          driver: editForm.driver_id,
+          driver_id: editForm.driver_id,
+        } : o));
+      }
+      setSelected(prev => ({ ...prev, ...editForm, driver: editForm.driver_id, driver_id: editForm.driver_id }));
+      setShowEdit(false);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const handleCreateOrder = async () => {
+    if (!createForm.address) return;
+    setSaving(true);
+    try {
+      const id = createForm.id || `DEL-${new Date().getFullYear()}-MANUAL-${Date.now()}`;
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...createForm, id }),
+      });
+      if (period === 'today') await fetchOrders();
+      else {
+        const res = await fetch(`/api/orders/${id}`);
+        const data = await res.json();
+        setAllOrders(prev => [data, ...prev]);
+      }
+      setShowCreate(false);
+      setCreateForm({ id:'', address:'', boxes:1, amount:'', date:new Date().toISOString().split('T')[0], notes:'', driver_id:'', status:'waiting' });
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
   useEffect(() => {
     if (period === '7days' || period === 'all') {
       setLoading7(true);
@@ -158,6 +241,10 @@ export default function AdminOrders() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { period==='today' ? fetchOrders() : null; }} className="btn btn-outline btn-sm">↻</button>
+          <button onClick={() => setShowCreate(true)}
+            className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>
+            + New order
+          </button>
           <button onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
             className="btn btn-sm"
             style={{background:selectMode?'var(--tn-red)':'white', color:selectMode?'white':'var(--tn-gold)', border:'0.5px solid var(--tn-border)'}}>
@@ -543,6 +630,10 @@ export default function AdminOrders() {
                   className="btn btn-sm px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>
                   {deleting ? '...' : '🗑 Delete'}
                 </button>
+                <button onClick={() => openEdit(selected)}
+                  className="btn btn-sm px-3" style={{background:'var(--tn-warm)',color:'var(--tn-dark)',border:'0.5px solid var(--tn-border)'}}>
+                  ✏️ Edit
+                </button>
                 {selected.status !== 'delivered' && selected.status !== 'attempted' && (
                   <button onClick={async () => {
                     const now = new Date().toLocaleString('en-CA');
@@ -580,6 +671,129 @@ export default function AdminOrders() {
                 )}
                 <button onClick={() => setSelected(null)} className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit order modal */}
+      {showEdit && selected && (
+        <div className="fixed inset-0 flex items-center justify-center z-[60] p-4" style={{background:'rgba(26,18,8,0.7)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>✏️ Edit order — {selected.id}</p>
+              <button onClick={() => setShowEdit(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="label">Delivery address</label>
+                <input className="input" value={editForm.address} onChange={e=>setEditForm(f=>({...f,address:e.target.value}))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Boxes</label>
+                  <input type="number" className="input" value={editForm.boxes} onChange={e=>setEditForm(f=>({...f,boxes:parseInt(e.target.value)||1}))} />
+                </div>
+                <div>
+                  <label className="label">Amount ($)</label>
+                  <input type="number" step="0.01" className="input" value={editForm.amount} onChange={e=>setEditForm(f=>({...f,amount:e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Date</label>
+                <input type="date" className="input" value={editForm.date} onChange={e=>setEditForm(f=>({...f,date:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={editForm.status} onChange={e=>setEditForm(f=>({...f,status:e.target.value}))}>
+                  <option value="waiting">Waiting</option>
+                  <option value="picked">Picked up</option>
+                  <option value="enroute">En route</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="attempted">Attempted delivery</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Driver</label>
+                <select className="input" value={editForm.driver_id} onChange={e=>setEditForm(f=>({...f,driver_id:e.target.value}))}>
+                  <option value="">— Unassigned —</option>
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <textarea className="input" rows={3} style={{resize:'none'}} value={editForm.notes}
+                  onChange={e=>setEditForm(f=>({...f,notes:e.target.value}))} />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowEdit(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                <button onClick={handleSaveEdit} disabled={saving}
+                  className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white',opacity:saving?0.6:1}}>
+                  {saving ? '⏳ Saving...' : '💾 Save changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create order modal */}
+      {showCreate && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>+ New order</p>
+              <button onClick={() => setShowCreate(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="label">Order ID (optional — auto-generated if blank)</label>
+                <input className="input font-mono" placeholder="e.g. DEL-2026-9999"
+                  value={createForm.id} onChange={e=>setCreateForm(f=>({...f,id:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Delivery address *</label>
+                <input className="input" placeholder="123 Rue Example, Montréal"
+                  value={createForm.address} onChange={e=>setCreateForm(f=>({...f,address:e.target.value}))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Boxes</label>
+                  <input type="number" className="input" value={createForm.boxes}
+                    onChange={e=>setCreateForm(f=>({...f,boxes:parseInt(e.target.value)||1}))} />
+                </div>
+                <div>
+                  <label className="label">Amount ($)</label>
+                  <input type="number" step="0.01" className="input" placeholder="0.00"
+                    value={createForm.amount} onChange={e=>setCreateForm(f=>({...f,amount:e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Date</label>
+                <input type="date" className="input" value={createForm.date}
+                  onChange={e=>setCreateForm(f=>({...f,date:e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Assign driver (optional)</label>
+                <select className="input" value={createForm.driver_id}
+                  onChange={e=>setCreateForm(f=>({...f,driver_id:e.target.value}))}>
+                  <option value="">— Unassigned —</option>
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Notes (optional)</label>
+                <textarea className="input" rows={3} style={{resize:'none'}} placeholder="Delivery notes..."
+                  value={createForm.notes} onChange={e=>setCreateForm(f=>({...f,notes:e.target.value}))} />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowCreate(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
+                <button onClick={handleCreateOrder} disabled={saving || !createForm.address}
+                  className="btn flex-1 justify-center"
+                  style={{background:'var(--tn-red)',color:'white',opacity:saving||!createForm.address?0.6:1}}>
+                  {saving ? '⏳ Creating...' : '+ Create order'}
                 </button>
               </div>
             </div>
