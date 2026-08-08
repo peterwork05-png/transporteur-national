@@ -887,15 +887,27 @@ router.get('/invoices/:id/preview', async (req, res) => {
 
     let orders = [];
     if (inv.type === 'local') {
-      const { rows } = await pool.query(`
-        SELECT o.* FROM orders o
-        LEFT JOIN clients c ON o.client_id = c.id
-        WHERE c.client_group = $1
-          AND o.status = 'delivered'
-          AND o.date >= $2 AND o.date <= $3
-        ORDER BY o.date ASC
-      `, [inv.client_group, inv.date_from, inv.date_to]);
-      orders = rows;
+      // Check for explicit invoice_orders first
+      await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
+      const { rows: linked } = await pool.query(
+        `SELECT order_id FROM invoice_orders WHERE invoice_id = $1`, [req.params.id]
+      );
+      if (linked.length > 0) {
+        const ids = linked.map(r => r.order_id);
+        const { rows } = await pool.query(
+          `SELECT o.* FROM orders o WHERE o.id = ANY($1) ORDER BY o.date ASC`, [ids]
+        );
+        orders = rows;
+      } else {
+        const { rows } = await pool.query(`
+          SELECT o.* FROM orders o
+          LEFT JOIN clients c ON o.client_id = c.id
+          WHERE c.client_group = $1 AND o.status = 'delivered'
+            AND o.date >= $2 AND o.date <= $3
+          ORDER BY o.date ASC
+        `, [inv.client_group, inv.date_from, inv.date_to]);
+        orders = rows;
+      }
     }
 
     const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
@@ -917,15 +929,26 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
     const inv = invRows[0];
     let orders = [];
     if (inv.type === 'local') {
-      const { rows } = await pool.query(`
-        SELECT o.* FROM orders o
-        LEFT JOIN clients c ON o.client_id = c.id
-        WHERE c.client_group = $1
-          AND o.status = 'delivered'
-          AND o.date >= $2 AND o.date <= $3
-        ORDER BY o.date ASC
-      `, [inv.client_group, inv.date_from, inv.date_to]);
-      orders = rows;
+      await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
+      const { rows: linked } = await pool.query(
+        `SELECT order_id FROM invoice_orders WHERE invoice_id = $1`, [req.params.id]
+      );
+      if (linked.length > 0) {
+        const ids = linked.map(r => r.order_id);
+        const { rows } = await pool.query(
+          `SELECT o.* FROM orders o WHERE o.id = ANY($1) ORDER BY o.date ASC`, [ids]
+        );
+        orders = rows;
+      } else {
+        const { rows } = await pool.query(`
+          SELECT o.* FROM orders o
+          LEFT JOIN clients c ON o.client_id = c.id
+          WHERE c.client_group = $1 AND o.status = 'delivered'
+            AND o.date >= $2 AND o.date <= $3
+          ORDER BY o.date ASC
+        `, [inv.client_group, inv.date_from, inv.date_to]);
+        orders = rows;
+      }
     }
     const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
     const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id);
