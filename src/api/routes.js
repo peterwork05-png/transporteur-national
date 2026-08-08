@@ -1331,6 +1331,19 @@ async function recalcInvoice(invoiceId) {
   await pool.query(`UPDATE invoices SET subtotal=$1, tps=$2, tvq=$3, total=$4 WHERE id=$5`,
     [subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2), invoiceId]);
 }
+// Search orders for invoice management
+router.get('/orders/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const { rows } = await pool.query(`
+      SELECT o.*, c.name as client_name FROM orders o
+      LEFT JOIN clients c ON o.client_id = c.id
+      WHERE o.id ILIKE $1 OR o.address ILIKE $1
+      ORDER BY o.date DESC LIMIT 20
+    `, [`%${q}%`]);
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
