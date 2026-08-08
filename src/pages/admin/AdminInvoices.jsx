@@ -147,17 +147,11 @@ export default function AdminInvoices() {
       await fetch(`/api/invoices/${selected.id}/orders/${orderId}`, { method: 'DELETE' });
       await fetchInvoiceOrders(selected.id);
       await fetchInvoices();
-      setSelected(prev => prev ? { ...prev } : null);
-    } catch(e) { console.error(e); }
-  };
-
-  const handleSearchOrders = async (q) => {
-    setAddOrderSearch(q);
-    if (!q || q.length < 2) { setAddOrderResults([]); return; }
-    try {
-      const res  = await fetch(`/api/orders/search?q=${encodeURIComponent(q)}`);
+      // Refresh selected invoice with updated totals
+      const res = await fetch(`/api/invoices`);
       const data = await res.json();
-      setAddOrderResults(data.filter(o => !invoiceOrders.find(io => io.id === o.id)));
+      const updated = data.find(i => i.id === selected.id);
+      if (updated) setSelected(prev => ({ ...prev, ...updated, amount: parseFloat(updated.total || 0) }));
     } catch(e) { console.error(e); }
   };
 
@@ -171,7 +165,11 @@ export default function AdminInvoices() {
       });
       await fetchInvoiceOrders(selected.id);
       await fetchInvoices();
-      setSelected(prev => prev ? { ...prev } : null);
+      // Refresh selected invoice with updated totals
+      const res = await fetch(`/api/invoices`);
+      const data = await res.json();
+      const updated = data.find(i => i.id === selected.id);
+      if (updated) setSelected(prev => ({ ...prev, ...updated, amount: parseFloat(updated.total || 0) }));
       setAddOrderSearch('');
       setAddOrderResults([]);
       setShowAddOrder(false);
@@ -514,9 +512,9 @@ export default function AdminInvoices() {
                           </button>
                         </div>
                       ))}
-                      <p className="text-xs text-right font-medium pt-1" style={{color:'var(--tn-gold)'}}>
-                        {invoiceOrders.length} orders · Totals auto-recalculate
-                      </p>
+                      <div className="rounded-lg p-2 text-xs" style={{background:'#FEF3C7',color:'#92400E'}}>
+                        ⚠️ After adding/removing orders, click <strong>🔄 Regenerate PDF</strong> to update the PDF.
+                      </div>
                     </div>
                   )}
                 </div>
