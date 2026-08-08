@@ -96,13 +96,13 @@ export default function AdminInvoices() {
     let total = parseFloat(form.amount) || 0;
     if (form.type === 'contract' && !form.amount) total = calcTotals().total;
     await addInvoice({
-      id: form.invNum, type: form.type, route: form.route, client: form.client,
+      id: form.invNum, type: form.type, route: form.route, client: form.client || null,
       dates: `${form.dateFrom} – ${form.dateTo}`, amount: Math.round(total * 100) / 100,
       days: form.days, status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
     });
     await fetchInvoices();
     setShowNew(false);
-    setForm({ invNum:'', type:'contract', route:'ontario', client:'beg', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
+    setForm({ invNum:'', type:'contract', route:'ontario', client:'', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
   };
 
   const handleDelete = async () => {
