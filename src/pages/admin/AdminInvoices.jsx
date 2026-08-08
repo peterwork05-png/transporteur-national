@@ -82,7 +82,33 @@ export default function AdminInvoices() {
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
   });
 
-  const filtered = invoices.filter(inv => tab==='all' ? true : inv.status===tab);
+  const [sortBy,  setSortBy]  = useState('id_desc');
+  const [search,  setSearch]  = useState('');
+
+  const filtered = invoices
+    .filter(inv => tab==='all' ? true : inv.status===tab)
+    .filter(inv => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return String(inv.id).includes(s) ||
+        (inv.client_name||'').toLowerCase().includes(s) ||
+        (inv.type||'').toLowerCase().includes(s) ||
+        (inv.dates||'').includes(s);
+    })
+    .sort((a, b) => {
+      switch(sortBy) {
+        case 'id_asc':    return parseInt(a.id) - parseInt(b.id);
+        case 'id_desc':   return parseInt(b.id) - parseInt(a.id);
+        case 'amount_asc':  return parseFloat(a.amount||0) - parseFloat(b.amount||0);
+        case 'amount_desc': return parseFloat(b.amount||0) - parseFloat(a.amount||0);
+        case 'date_asc':  return new Date(a.date_from||0) - new Date(b.date_from||0);
+        case 'date_desc': return new Date(b.date_from||0) - new Date(a.date_from||0);
+        case 'client':    return (a.client_name||'').localeCompare(b.client_name||'');
+        case 'status':    return (a.status||'').localeCompare(b.status||'');
+        default: return parseInt(b.id) - parseInt(a.id);
+      }
+    });
+
   const fmt = n => `$${parseFloat(n||0).toLocaleString('en-CA',{minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const getClientName = inv => CLIENTS[inv.client]?.name || inv.client_name || inv.client || '—';
   const TABS = [['all','All'],['pending','Pending'],['paid','Paid'],['overdue','Overdue'],['draft','Draft']];
@@ -310,7 +336,7 @@ export default function AdminInvoices() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap">
         {TABS.map(([val,label]) => (
           <button key={val} onClick={() => setTab(val)}
             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -318,6 +344,22 @@ export default function AdminInvoices() {
             {label}
           </button>
         ))}
+      </div>
+
+      {/* Search + Sort */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <input className="input flex-1 text-sm" placeholder="🔍 Search by invoice #, client, date..."
+          value={search} onChange={e=>setSearch(e.target.value)} style={{minWidth:'180px'}} />
+        <select className="input text-sm flex-shrink-0" value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{width:'auto'}}>
+          <option value="id_desc">Invoice # ↓ (newest first)</option>
+          <option value="id_asc">Invoice # ↑ (oldest first)</option>
+          <option value="date_desc">Date ↓ (newest)</option>
+          <option value="date_asc">Date ↑ (oldest)</option>
+          <option value="amount_desc">Amount ↓ (highest)</option>
+          <option value="amount_asc">Amount ↑ (lowest)</option>
+          <option value="client">Client A→Z</option>
+          <option value="status">Status</option>
+        </select>
       </div>
 
       {/* Desktop table */}
