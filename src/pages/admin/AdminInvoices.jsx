@@ -78,7 +78,7 @@ export default function AdminInvoices() {
   };
 
   const [form, setForm] = useState({
-    invNum: '', type:'contract', route:'ontario', client:'beg',
+    invNum: '', type:'contract', route:'ontario', client:'',
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
   });
 
@@ -894,8 +894,9 @@ export default function AdminInvoices() {
                 </div>
               )}
               <div>
-                <label className="label">Client</label>
+                <label className="label">Client (optional — leave blank for manual invoices)</label>
                 <select className="input" value={form.client} onChange={e=>setForm(f=>({...f,client:e.target.value}))}>
+                  <option value="">— No client (manual invoice) —</option>
                   {Object.values(CLIENTS).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
