@@ -147,11 +147,20 @@ export default function AdminInvoices() {
       await fetch(`/api/invoices/${selected.id}/orders/${orderId}`, { method: 'DELETE' });
       await fetchInvoiceOrders(selected.id);
       await fetchInvoices();
-      // Refresh selected invoice with updated totals
       const res = await fetch(`/api/invoices`);
       const data = await res.json();
       const updated = data.find(i => i.id === selected.id);
       if (updated) setSelected(prev => ({ ...prev, ...updated, amount: parseFloat(updated.total || 0) }));
+    } catch(e) { console.error(e); }
+  };
+
+  const handleSearchOrders = async (q) => {
+    setAddOrderSearch(q);
+    if (!q || q.length < 2) { setAddOrderResults([]); return; }
+    try {
+      const res  = await fetch(`/api/orders/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setAddOrderResults(Array.isArray(data) ? data.filter(o => !invoiceOrders.find(io => io.id === o.id)) : []);
     } catch(e) { console.error(e); }
   };
 
@@ -455,10 +464,14 @@ export default function AdminInvoices() {
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
                 {(() => {
-                  const total = parseFloat(selected.amount||0);
-                  const sub   = selected.subtotal ? parseFloat(selected.subtotal) : total / (1 + TPS + TVQ);
-                  const tps   = selected.tps ? parseFloat(selected.tps) : sub * TPS;
-                  const tvq   = selected.tvq ? parseFloat(selected.tvq) : sub * TVQ;
+                  // If we have explicit invoice orders loaded, calculate from them
+                  const liveSubtotal = selected.type === 'local' && invoiceOrders.length > 0
+                    ? invoiceOrders.reduce((s, o) => s + parseFloat(o.amount || 0), 0)
+                    : null;
+                  const sub   = liveSubtotal !== null ? liveSubtotal : (selected.subtotal ? parseFloat(selected.subtotal) : parseFloat(selected.amount||0) / (1 + TPS + TVQ));
+                  const tps   = sub * TPS;
+                  const tvq   = sub * TVQ;
+                  const total = sub + tps + tvq;
                   return (
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span>{fmt(sub)}</span></div>
