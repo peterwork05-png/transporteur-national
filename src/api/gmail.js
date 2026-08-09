@@ -152,7 +152,7 @@ export async function checkGmailRemittances() {
                   const { rows } = await pool.query(`
                     SELECT * FROM invoices 
                     WHERE status != 'paid'
-                    AND ABS(COALESCE(total, amount) - $1) < 1.00
+                    AND ABS(COALESCE(total, 0) - $1) < 1.00
                     ORDER BY created_at DESC
                     LIMIT 5
                   `, [amount]);
