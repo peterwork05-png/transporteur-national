@@ -14,7 +14,7 @@ export function getPreviousWeekDates(date = new Date()) {
   const day = d.getDay(); // 0=Sun, 1=Mon...
   // Go back to last Monday
   const monday = new Date(d);
-  monday.setDate(d.getDate() - ((day === 0 ? 7 : day) + 6));
+  monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
   // Friday is 4 days after Monday
   const friday = new Date(monday);
   friday.setDate(monday.getDate() + 4);
