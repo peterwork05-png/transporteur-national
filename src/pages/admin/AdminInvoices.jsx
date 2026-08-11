@@ -75,7 +75,7 @@ export default function AdminInvoices() {
   };
 
   const [form, setForm] = useState({
-    invNum: '', type:'contract', route:'ontario', client:'',
+    invNum: '', type:'local', route:'ontario', client:'',
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
   });
 
@@ -117,34 +117,15 @@ export default function AdminInvoices() {
 
   const handleCreate = async () => {
     let total = parseFloat(form.amount) || 0;
-    let subtotal = 0, tps = 0, tvq = 0;
-    if (form.type === 'contract') {
-      if (!form.amount) {
-        const calc = calcTotals();
-        total = calc.total;
-        subtotal = calc.sub;
-        tps = calc.tps;
-        tvq = calc.tvq;
-      } else {
-        subtotal = total / (1 + TPS + TVQ);
-        tps = subtotal * TPS;
-        tvq = subtotal * TVQ;
-      }
-    }
-    // For local: amount starts at 0, orders are added via + Add order
+    if (form.type === 'contract' && !form.amount) total = calcTotals().total;
     await addInvoice({
       id: form.invNum, type: form.type, route: form.route, client: form.client || null,
-      dates: `${form.dateFrom} – ${form.dateTo}`,
-      amount: Math.round(total * 100) / 100,
-      subtotal: subtotal.toFixed(2),
-      tps: tps.toFixed(2),
-      tvq: tvq.toFixed(2),
-      days: form.type === 'contract' ? form.days : null,
-      status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
+      dates: `${form.dateFrom} – ${form.dateTo}`, amount: Math.round(total * 100) / 100,
+      days: form.days, status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
     });
     await fetchInvoices();
     setShowNew(false);
-    setForm({ invNum:'', type:'contract', route:'ontario', client:'', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
+    setForm({ invNum:'', type:'local', route:'ontario', client:'', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
   };
 
   const handleDelete = async () => {
@@ -172,12 +153,17 @@ export default function AdminInvoices() {
   const [addOrderResults, setAddOrderResults] = useState([]);
   const [addingOrder,     setAddingOrder]     = useState(false);
 
-  const fetchInvoiceOrders = async (invoiceId) => {
+  const fetchInvoiceOrders = async (invoiceId, invoiceType) => {
     setLoadingOrders(true);
     try {
       const res  = await fetch(`/api/invoices/${invoiceId}/orders`);
       const data = await res.json();
       setInvoiceOrders(data.orders || []);
+      // Auto-recalculate and save totals for local invoices
+      if (invoiceType === 'local') {
+        await fetch(`/api/invoices/${invoiceId}/recalculate`, { method: 'POST' });
+        await fetchInvoices();
+      }
     } catch(e) { console.error(e); }
     setLoadingOrders(false);
   };
@@ -186,8 +172,7 @@ export default function AdminInvoices() {
     if (!window.confirm('Remove this order from the invoice? Totals will recalculate.')) return;
     try {
       await fetch(`/api/invoices/${selected.id}/orders/${orderId}`, { method: 'DELETE' });
-      await fetchInvoiceOrders(selected.id);
-      await fetchInvoices();
+      await fetchInvoiceOrders(selected.id, 'local');
       const res = await fetch(`/api/invoices`);
       const data = await res.json();
       const updated = data.find(i => i.id === selected.id);
@@ -213,8 +198,7 @@ export default function AdminInvoices() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order_id: orderId }),
       });
-      await fetchInvoiceOrders(selected.id);
-      await fetchInvoices();
+      await fetchInvoiceOrders(selected.id, 'local');
       const res = await fetch(`/api/invoices`);
       const data = await res.json();
       const updated = data.find(i => i.id === selected.id);
@@ -367,6 +351,7 @@ export default function AdminInvoices() {
         </select>
       </div>
 
+      {/* Desktop table */}
       <div className="card overflow-hidden hidden md:block">
         <table className="w-full">
           <thead>
@@ -378,7 +363,8 @@ export default function AdminInvoices() {
           </thead>
           <tbody>
             {filtered.map((inv, i) => (
-              <tr key={inv.id} onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id); else setInvoiceOrders([]); }}
+              <tr key={inv.id}
+                onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else setInvoiceOrders([]); }}
                 className="cursor-pointer hover:opacity-80"
                 style={{borderBottom:'0.5px solid var(--tn-border)', background:i%2===0?'white':'var(--tn-cream)'}}>
                 <td className="px-4 py-3 font-mono text-sm font-semibold" style={{color:'var(--tn-red)'}}>#{inv.id}</td>
@@ -399,9 +385,11 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
+      {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {filtered.map(inv => (
-          <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id); else setInvoiceOrders([]); }}>
+          <div key={inv.id} className="card p-4 cursor-pointer"
+            onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else setInvoiceOrders([]); }}>
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
@@ -419,6 +407,7 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
+      {/* Invoice detail modal */}
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
           style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
@@ -472,7 +461,6 @@ export default function AdminInvoices() {
                   {label:'Client', val: getClientName(selected)},
                   {label:'Type',   val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
                   {label:'Period', val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
-                  // Only show Days for contract invoices
                   selected.type==='contract' && selected.days ? {label:'Days', val:`${selected.days} days`} : null,
                 ].filter(Boolean).filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
@@ -646,6 +634,7 @@ export default function AdminInvoices() {
         </div>
       )}
 
+      {/* Email preview modal */}
       {showEmailPreview && emailPreviewData && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -728,6 +717,7 @@ export default function AdminInvoices() {
         </div>
       )}
 
+      {/* Generate invoices modal */}
       {showGenerate && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -814,6 +804,7 @@ export default function AdminInvoices() {
         </div>
       )}
 
+      {/* New invoice modal */}
       {showNew && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -870,7 +861,7 @@ export default function AdminInvoices() {
               )}
               {form.type==='local' && (
                 <div className="rounded-xl p-3" style={{background:'#EFF6FF',border:'0.5px solid #185FA5'}}>
-                  <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ For local invoices, amount is calculated automatically from orders. After creating, use <strong>+ Add order</strong> to add orders to this invoice.</p>
+                  <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ For local invoices, amount is calculated automatically when you open the invoice — it picks up all delivered orders in the selected period.</p>
                 </div>
               )}
               <div>
