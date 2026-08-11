@@ -1345,6 +1345,43 @@ router.get('/orders/search', async (req, res) => {
     res.json(rows);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Recalculate local invoice totals from orders
+router.post('/invoices/:id/recalculate', async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
+    
+    const { rows: invRows } = await pool.query(`SELECT * FROM invoices WHERE id = $1`, [req.params.id]);
+    if (!invRows.length || invRows[0].type !== 'local') return res.json({ success: false });
+    const inv = invRows[0];
+
+    // Get orders (explicit or date range)
+    const { rows: linked } = await pool.query(`SELECT order_id FROM invoice_orders WHERE invoice_id = $1`, [req.params.id]);
+    let orders = [];
+    if (linked.length > 0) {
+      const { rows } = await pool.query(`SELECT * FROM orders WHERE id = ANY($1)`, [linked.map(r => r.order_id)]);
+      orders = rows;
+    } else {
+      const { rows } = await pool.query(`
+        SELECT o.* FROM orders o
+        LEFT JOIN clients c ON o.client_id = c.id
+        WHERE c.client_group = $1 AND o.status = 'delivered'
+          AND o.date >= $2 AND o.date <= $3
+      `, [inv.client_group || inv.client_id, inv.date_from, inv.date_to]);
+      orders = rows;
+    }
+
+    const subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
+    const tps   = subtotal * 0.05;
+    const tvq   = subtotal * 0.09975;
+    const total = subtotal + tps + tvq;
+
+    await pool.query(
+      `UPDATE invoices SET subtotal=$1, tps=$2, tvq=$3, total=$4 WHERE id=$5`,
+      [subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2), req.params.id]
+    );
+    res.json({ success: true, subtotal, tps, tvq, total });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
