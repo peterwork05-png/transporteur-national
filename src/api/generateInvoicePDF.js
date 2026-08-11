@@ -17,12 +17,21 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
   const fmt        = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const isContract = invoice.type === 'contract';
 
+  // For local invoices, calculate totals from orders if not stored in DB
+  let subtotal = parseFloat(invoice.subtotal || 0);
+  if (!isContract && subtotal === 0 && orders && orders.length > 0) {
+    subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
+  }
+  const tps   = isContract ? parseFloat(invoice.tps   || 0) : subtotal * 0.05;
+  const tvq   = isContract ? parseFloat(invoice.tvq   || 0) : subtotal * 0.09975;
+  const total = isContract ? parseFloat(invoice.total || 0) : subtotal + tps + tvq;
+
   const tableRows = isContract ? `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${invoice.days || 5} jours / days</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${invoice.days || 5}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(invoice.subtotal)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(subtotal)}</td>
     </tr>
   ` : (orders || []).map(o => `
     <tr>
@@ -97,19 +106,19 @@ export function generateInvoiceHTML(invoice, orders, clientGroup) {
   <table style="margin-left:auto;min-width:280px">
     <tr>
       <td style="padding:6px 12px;font-size:12px;color:#666">Sous-total / Subtotal</td>
-      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(invoice.subtotal)}</td>
+      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(subtotal)}</td>
     </tr>
     <tr>
       <td style="padding:6px 12px;font-size:12px;color:#666">TPS (5%)</td>
-      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(invoice.tps)}</td>
+      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(tps)}</td>
     </tr>
     <tr>
       <td style="padding:6px 12px;font-size:12px;color:#666">TVQ (9.975%)</td>
-      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(invoice.tvq)}</td>
+      <td style="padding:6px 12px;font-size:12px;text-align:right">${fmt(tvq)}</td>
     </tr>
     <tr style="border-top:2px solid #1A1208">
       <td style="padding:10px 12px;font-size:14px;font-weight:bold">TOTAL</td>
-      <td style="padding:10px 12px;font-size:16px;font-weight:bold;text-align:right;color:#C0392B">${fmt(invoice.total)}</td>
+      <td style="padding:10px 12px;font-size:16px;font-weight:bold;text-align:right;color:#C0392B">${fmt(total)}</td>
     </tr>
   </table>
 
