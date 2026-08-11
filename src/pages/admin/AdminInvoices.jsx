@@ -18,9 +18,8 @@ export default function AdminInvoices() {
   const [emailMsg,     setEmailMsg]     = useState('');
   const fileRef = useRef(null);
 
-  // Generate invoices modal
   const [showGenerate,  setShowGenerate]  = useState(false);
-  const [genType,       setGenType]       = useState('local'); // 'local' | 'contract'
+  const [genType,       setGenType]       = useState('local');
   const [genDateFrom,   setGenDateFrom]   = useState('');
   const [genDateTo,     setGenDateTo]     = useState('');
   const [genClient,     setGenClient]     = useState('');
@@ -49,7 +48,6 @@ export default function AdminInvoices() {
     setGenerating(false);
   };
 
-  // Quick period helpers
   const setCurrentPeriod = () => {
     const today = new Date();
     const day   = today.getDate();
@@ -57,11 +55,10 @@ export default function AdminInvoices() {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
     if (genType === 'contract') {
-      // Previous week Mon-Fri
       const d = new Date(today);
       const dayOfWeek = d.getDay();
       const monday = new Date(d);
-      monday.setDate(d.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) + 6));
+      monday.setDate(d.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
       const friday = new Date(monday);
       friday.setDate(monday.getDate() + 4);
       setGenDateFrom(monday.toISOString().split('T')[0]);
@@ -82,8 +79,8 @@ export default function AdminInvoices() {
     days:5, dateFrom:'', dateTo:'', amount:'', status:'pending',
   });
 
-  const [sortBy,  setSortBy]  = useState('id_desc');
-  const [search,  setSearch]  = useState('');
+  const [sortBy, setSortBy] = useState('id_desc');
+  const [search, setSearch] = useState('');
 
   const filtered = invoices
     .filter(inv => tab==='all' ? true : inv.status===tab)
@@ -97,15 +94,15 @@ export default function AdminInvoices() {
     })
     .sort((a, b) => {
       switch(sortBy) {
-        case 'id_asc':    return parseInt(a.id) - parseInt(b.id);
-        case 'id_desc':   return parseInt(b.id) - parseInt(a.id);
+        case 'id_asc':      return parseInt(a.id) - parseInt(b.id);
+        case 'id_desc':     return parseInt(b.id) - parseInt(a.id);
         case 'amount_asc':  return parseFloat(a.amount||0) - parseFloat(b.amount||0);
         case 'amount_desc': return parseFloat(b.amount||0) - parseFloat(a.amount||0);
-        case 'date_asc':  return new Date(a.date_from||0) - new Date(b.date_from||0);
-        case 'date_desc': return new Date(b.date_from||0) - new Date(a.date_from||0);
-        case 'client':    return (a.client_name||'').localeCompare(b.client_name||'');
-        case 'status':    return (a.status||'').localeCompare(b.status||'');
-        default: return parseInt(b.id) - parseInt(a.id);
+        case 'date_asc':    return new Date(a.date_from||0) - new Date(b.date_from||0);
+        case 'date_desc':   return new Date(b.date_from||0) - new Date(a.date_from||0);
+        case 'client':      return (a.client_name||'').localeCompare(b.client_name||'');
+        case 'status':      return (a.status||'').localeCompare(b.status||'');
+        default:            return parseInt(b.id) - parseInt(a.id);
       }
     });
 
@@ -120,11 +117,30 @@ export default function AdminInvoices() {
 
   const handleCreate = async () => {
     let total = parseFloat(form.amount) || 0;
-    if (form.type === 'contract' && !form.amount) total = calcTotals().total;
+    let subtotal = 0, tps = 0, tvq = 0;
+    if (form.type === 'contract') {
+      if (!form.amount) {
+        const calc = calcTotals();
+        total = calc.total;
+        subtotal = calc.sub;
+        tps = calc.tps;
+        tvq = calc.tvq;
+      } else {
+        subtotal = total / (1 + TPS + TVQ);
+        tps = subtotal * TPS;
+        tvq = subtotal * TVQ;
+      }
+    }
+    // For local: amount starts at 0, orders are added via + Add order
     await addInvoice({
       id: form.invNum, type: form.type, route: form.route, client: form.client || null,
-      dates: `${form.dateFrom} – ${form.dateTo}`, amount: Math.round(total * 100) / 100,
-      days: form.days, status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
+      dates: `${form.dateFrom} – ${form.dateTo}`,
+      amount: Math.round(total * 100) / 100,
+      subtotal: subtotal.toFixed(2),
+      tps: tps.toFixed(2),
+      tvq: tvq.toFixed(2),
+      days: form.type === 'contract' ? form.days : null,
+      status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
     });
     await fetchInvoices();
     setShowNew(false);
@@ -149,13 +165,12 @@ export default function AdminInvoices() {
   const [editEmailNote,    setEditEmailNote]    = useState('');
   const [showEmailBody,    setShowEmailBody]    = useState(false);
 
-  // Invoice orders management
-  const [invoiceOrders,     setInvoiceOrders]     = useState([]);
-  const [loadingOrders,     setLoadingOrders]     = useState(false);
-  const [showAddOrder,      setShowAddOrder]      = useState(false);
-  const [addOrderSearch,    setAddOrderSearch]    = useState('');
-  const [addOrderResults,   setAddOrderResults]   = useState([]);
-  const [addingOrder,       setAddingOrder]       = useState(false);
+  const [invoiceOrders,   setInvoiceOrders]   = useState([]);
+  const [loadingOrders,   setLoadingOrders]   = useState(false);
+  const [showAddOrder,    setShowAddOrder]    = useState(false);
+  const [addOrderSearch,  setAddOrderSearch]  = useState('');
+  const [addOrderResults, setAddOrderResults] = useState([]);
+  const [addingOrder,     setAddingOrder]     = useState(false);
 
   const fetchInvoiceOrders = async (invoiceId) => {
     setLoadingOrders(true);
@@ -200,7 +215,6 @@ export default function AdminInvoices() {
       });
       await fetchInvoiceOrders(selected.id);
       await fetchInvoices();
-      // Refresh selected invoice with updated totals
       const res = await fetch(`/api/invoices`);
       const data = await res.json();
       const updated = data.find(i => i.id === selected.id);
@@ -247,17 +261,12 @@ export default function AdminInvoices() {
   const handleStatusChange = async (newStatus) => {
     setUpdatingStatus(true);
     try {
-      if (newStatus === 'paid') {
-        await fetch(`/api/invoices/${selected.id}/pay`, {
-          method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ eft_number: selected.eft || null }),
-        });
-      } else {
-        await fetch(`/api/invoices/${selected.id}/pay`, {
-          method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ status: newStatus }),
-        });
-      }
+      await fetch(`/api/invoices/${selected.id}/pay`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(newStatus === 'paid'
+          ? { eft_number: selected.eft || null }
+          : { status: newStatus }),
+      });
       await fetchInvoices();
       setSelected(prev => ({ ...prev, status: newStatus }));
     } catch(e) { console.error(e); }
@@ -291,9 +300,7 @@ export default function AdminInvoices() {
     setTimeout(() => setUploadMsg(''), 4000);
   };
 
-  const handlePreview = () => {
-    window.open(`/api/invoices/${selected.id}/preview`, '_blank');
-  };
+  const handlePreview = () => window.open(`/api/invoices/${selected.id}/preview`, '_blank');
 
   const handlePDFUpload = async (invoiceId, file) => {
     setUploading(true);
@@ -326,16 +333,15 @@ export default function AdminInvoices() {
           <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Invoices</h1>
           <p className="text-sm mt-0.5" style={{color:'var(--tn-gold)'}}>Manage and upload invoice PDFs</p>
         </div>
-      <div className="flex items-center gap-2">
-        <button onClick={() => { setShowGenerate(true); setGenResult(null); setGenClient(''); setGenType('local'); setCurrentPeriod(); }}
-          className="btn btn-sm" style={{background:'var(--tn-gold)',color:'white'}}>
-          ⚡ Generate
-        </button>
-        <button onClick={() => setShowNew(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ New</button>
-      </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setShowGenerate(true); setGenResult(null); setGenClient(''); setGenType('local'); setCurrentPeriod(); }}
+            className="btn btn-sm" style={{background:'var(--tn-gold)',color:'white'}}>
+            ⚡ Generate
+          </button>
+          <button onClick={() => setShowNew(true)} className="btn btn-sm" style={{background:'var(--tn-red)',color:'white'}}>+ New</button>
+        </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 mb-3 flex-wrap">
         {TABS.map(([val,label]) => (
           <button key={val} onClick={() => setTab(val)}
@@ -346,7 +352,6 @@ export default function AdminInvoices() {
         ))}
       </div>
 
-      {/* Search + Sort */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <input className="input flex-1 text-sm" placeholder="🔍 Search by invoice #, client, date..."
           value={search} onChange={e=>setSearch(e.target.value)} style={{minWidth:'180px'}} />
@@ -362,7 +367,6 @@ export default function AdminInvoices() {
         </select>
       </div>
 
-      {/* Desktop table */}
       <div className="card overflow-hidden hidden md:block">
         <table className="w-full">
           <thead>
@@ -386,17 +390,8 @@ export default function AdminInvoices() {
                 <td className="px-4 py-3 text-sm">{getClientName(inv)}</td>
                 <td className="px-4 py-3 text-sm" style={{color:'var(--tn-gold)'}}>{String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}</td>
                 <td className="px-4 py-3 text-sm font-semibold">{fmt(inv.amount)}</td>
-                <td className="px-4 py-3">
-                  <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>
-                    {inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {inv.pdf_url
-                    ? <span className="badge badge-success">📄 PDF</span>
-                    : <span className="badge badge-gray">No PDF</span>
-                  }
-                </td>
+                <td className="px-4 py-3"><span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>{inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}</span></td>
+                <td className="px-4 py-3">{inv.pdf_url ? <span className="badge badge-success">📄 PDF</span> : <span className="badge badge-gray">No PDF</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -404,7 +399,6 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
-      {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {filtered.map(inv => (
           <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id); else setInvoiceOrders([]); }}>
@@ -414,23 +408,17 @@ export default function AdminInvoices() {
                 <p className="text-sm font-medium mt-0.5">{getClientName(inv)}</p>
                 <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}</p>
               </div>
-              <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'} flex-shrink-0`}>
-                {inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}
-              </span>
+              <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'} flex-shrink-0`}>{inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}</span>
             </div>
             <div className="flex items-center justify-between pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
               <p className="font-semibold text-sm">{fmt(inv.amount)}</p>
-              {inv.pdf_url
-                ? <span className="badge badge-success">📄 PDF attached</span>
-                : <span className="badge badge-gray">No PDF</span>
-              }
+              {inv.pdf_url ? <span className="badge badge-success">📄 PDF attached</span> : <span className="badge badge-gray">No PDF</span>}
             </div>
           </div>
         ))}
         {filtered.length===0 && <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
-      {/* Invoice detail modal */}
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
           style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
@@ -442,15 +430,12 @@ export default function AdminInvoices() {
                 <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Invoice details</p>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`badge ${STATUS_BADGE[selected.status]||'badge-gray'}`}>
-                  {selected.status?.charAt(0).toUpperCase()+selected.status?.slice(1)}
-                </span>
+                <span className={`badge ${STATUS_BADGE[selected.status]||'badge-gray'}`}>{selected.status?.charAt(0).toUpperCase()+selected.status?.slice(1)}</span>
                 <button onClick={() => setSelected(null)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
               </div>
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Status selector */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>Status</p>
                 <div className="flex gap-1 flex-wrap">
@@ -469,32 +454,27 @@ export default function AdminInvoices() {
                 </div>
               </div>
 
-              {/* Type selector */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-2" style={{color:'var(--tn-gold)'}}>Type</p>
                 <div className="flex gap-1">
                   {['local','contract'].map(t => (
                     <button key={t} onClick={() => handleTypeChange(t)}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
-                      style={{
-                        background: selected.type===t ? 'var(--tn-red)' : 'white',
-                        color: selected.type===t ? 'white' : 'var(--tn-gold)',
-                        border: '0.5px solid var(--tn-border)',
-                      }}>
+                      style={{background: selected.type===t ? 'var(--tn-red)' : 'white', color: selected.type===t ? 'white' : 'var(--tn-gold)', border: '0.5px solid var(--tn-border)'}}>
                       {t==='local' ? '📦 Local' : '🗺️ Contract'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Invoice info */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  {label:'Client',  val: getClientName(selected)},
-                  {label:'Type',    val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
-                  {label:'Period',  val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
-                  {label:'Days',    val: selected.days ? `${selected.days} days` : null},
-                ].filter(i=>i.val).map((item,i)=>(
+                  {label:'Client', val: getClientName(selected)},
+                  {label:'Type',   val: selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
+                  {label:'Period', val: `${String(selected.date_from||selected.dates||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
+                  // Only show Days for contract invoices
+                  selected.type==='contract' && selected.days ? {label:'Days', val:`${selected.days} days`} : null,
+                ].filter(Boolean).filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
                     <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
                     <p className="font-semibold text-sm mt-0.5">{item.val}</p>
@@ -502,11 +482,9 @@ export default function AdminInvoices() {
                 ))}
               </div>
 
-              {/* Amount breakdown */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
                 {(() => {
-                  // If we have explicit invoice orders loaded, calculate from them
                   const liveSubtotal = selected.type === 'local' && invoiceOrders.length > 0
                     ? invoiceOrders.reduce((s, o) => s + parseFloat(o.amount || 0), 0)
                     : null;
@@ -537,7 +515,6 @@ export default function AdminInvoices() {
                 </div>
               )}
 
-              {/* Orders included — local invoices only */}
               {selected.type === 'local' && (
                 <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                   <div className="flex items-center justify-between mb-3">
@@ -550,7 +527,7 @@ export default function AdminInvoices() {
                   {loadingOrders ? (
                     <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>Loading...</p>
                   ) : invoiceOrders.length === 0 ? (
-                    <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>No orders linked</p>
+                    <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>No orders linked — use + Add order above</p>
                   ) : (
                     <div className="space-y-2">
                       {invoiceOrders.map(order => (
@@ -562,9 +539,7 @@ export default function AdminInvoices() {
                           <p className="text-xs font-semibold flex-shrink-0">${parseFloat(order.amount||0).toFixed(2)}</p>
                           <button onClick={() => handleRemoveOrder(order.id)}
                             className="text-xs flex-shrink-0 px-2 py-1 rounded"
-                            style={{background:'#FEE2E2',color:'#991B1B'}}>
-                            ❌
-                          </button>
+                            style={{background:'#FEE2E2',color:'#991B1B'}}>❌</button>
                         </div>
                       ))}
                       <div className="rounded-lg p-2 text-xs" style={{background:'#FEF3C7',color:'#92400E'}}>
@@ -575,7 +550,6 @@ export default function AdminInvoices() {
                 </div>
               )}
 
-              {/* Add order modal */}
               {showAddOrder && (
                 <div className="rounded-xl p-4" style={{background:'#EFF6FF', border:'0.5px solid #185FA5'}}>
                   <div className="flex items-center justify-between mb-2">
@@ -601,7 +575,6 @@ export default function AdminInvoices() {
                 </div>
               )}
 
-              {/* PDF section */}
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>📄 Invoice PDF</p>
                 {selected.pdf_url ? (
@@ -610,18 +583,14 @@ export default function AdminInvoices() {
                       <span>📄</span>
                       <p className="text-sm font-medium flex-1" style={{color:'#0F6E56'}}>PDF attached</p>
                       <a href={selected.pdf_url} target="_blank" rel="noreferrer"
-                        className="btn btn-sm" style={{background:'#0F6E56',color:'white'}}>
-                        ⬇ Download
-                      </a>
+                        className="btn btn-sm" style={{background:'#0F6E56',color:'white'}}>⬇ Download</a>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={handleGeneratePDF} disabled={uploading}
-                        className="btn btn-outline btn-sm flex-1 justify-center text-xs"
-                        style={{opacity:uploading?0.6:1}}>
+                        className="btn btn-outline btn-sm flex-1 justify-center text-xs" style={{opacity:uploading?0.6:1}}>
                         {uploading ? '⏳...' : '🔄 Regenerate PDF'}
                       </button>
-                      <button onClick={handlePreview}
-                        className="btn btn-outline btn-sm flex-1 justify-center text-xs">
+                      <button onClick={handlePreview} className="btn btn-outline btn-sm flex-1 justify-center text-xs">
                         👁 Preview
                       </button>
                     </div>
@@ -635,13 +604,11 @@ export default function AdminInvoices() {
                         {uploading ? '⏳ Generating PDF...' : '✨ Generate PDF'}
                       </button>
                     )}
-                    <button onClick={handlePreview}
-                      className="btn btn-outline w-full justify-center text-xs">
+                    <button onClick={handlePreview} className="btn btn-outline w-full justify-center text-xs">
                       👁 Preview HTML
                     </button>
                     <div className="border-2 border-dashed rounded-xl p-5 text-center cursor-pointer"
-                      style={{borderColor:'var(--tn-border-strong)'}}
-                      onClick={() => fileRef.current?.click()}>
+                      style={{borderColor:'var(--tn-border-strong)'}} onClick={() => fileRef.current?.click()}>
                       <p className="text-2xl mb-2">📤</p>
                       <p className="text-sm font-medium">Or upload existing PDF</p>
                       <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Click to select PDF file</p>
@@ -649,15 +616,9 @@ export default function AdminInvoices() {
                   </div>
                 )}
                 <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) handlePDFUpload(selected.id, file);
-                    e.target.value = '';
-                  }} />
+                  onChange={e => { const file = e.target.files?.[0]; if (file) handlePDFUpload(selected.id, file); e.target.value = ''; }} />
                 {uploadMsg && (
-                  <p className="text-xs mt-2 text-center font-medium" style={{color:uploadMsg.includes('✅')?'#0F6E56':'#991B1B'}}>
-                    {uploadMsg}
-                  </p>
+                  <p className="text-xs mt-2 text-center font-medium" style={{color:uploadMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{uploadMsg}</p>
                 )}
               </div>
 
@@ -669,29 +630,22 @@ export default function AdminInvoices() {
                 <button onClick={() => setSelected(null)} className="btn btn-outline flex-1 justify-center">Close</button>
                 {selected.pdf_url && (
                   <>
-                    <button onClick={handlePreviewEmail}
-                      className="btn flex-1 justify-center"
-                      style={{background:'#0F6E56', color:'white'}}>
+                    <button onClick={handlePreviewEmail} className="btn flex-1 justify-center" style={{background:'#0F6E56', color:'white'}}>
                       📧 Send to client
                     </button>
                     <a href={selected.pdf_url} target="_blank" rel="noreferrer"
-                      className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
-                      ⬇ PDF
-                    </a>
+                      className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>⬇ PDF</a>
                   </>
                 )}
               </div>
               {emailMsg && (
-                <p className="text-xs mt-2 text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>
-                  {emailMsg}
-                </p>
+                <p className="text-xs mt-2 text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{emailMsg}</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Email preview modal */}
       {showEmailPreview && emailPreviewData && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -700,55 +654,32 @@ export default function AdminInvoices() {
               <button onClick={() => setShowEmailPreview(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
             </div>
             <div className="p-5 space-y-4">
-
-              {/* Editable To */}
               <div>
                 <label className="label">To (edit to add/remove recipients)</label>
                 <input className="input" value={editEmailTo} onChange={e=>setEditEmailTo(e.target.value)}
                   placeholder="email@company.com, email2@company.com" />
                 <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Separate multiple emails with commas</p>
               </div>
-
-              {/* Editable Subject */}
               <div>
                 <label className="label">Subject</label>
                 <input className="input" value={editEmailSubject} onChange={e=>setEditEmailSubject(e.target.value)} />
               </div>
-
-              {/* Invoice summary */}
               <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs mb-2 font-medium" style={{color:'var(--tn-gold)'}}>Invoice details (auto-included)</p>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span style={{color:'var(--tn-gold)'}}>Invoice #</span>
-                    <span className="font-medium">#{emailPreviewData.invoiceId}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span style={{color:'var(--tn-gold)'}}>Period</span>
-                    <span className="font-medium">{emailPreviewData.dateFrom} – {emailPreviewData.dateTo}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span style={{color:'var(--tn-gold)'}}>Type</span>
-                    <span className="font-medium">{emailPreviewData.type}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}>
-                    <span>Total</span>
-                    <span style={{color:'var(--tn-red)'}}>{emailPreviewData.total}</span>
-                  </div>
+                  <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Invoice #</span><span className="font-medium">#{emailPreviewData.invoiceId}</span></div>
+                  <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Period</span><span className="font-medium">{emailPreviewData.dateFrom} – {emailPreviewData.dateTo}</span></div>
+                  <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Type</span><span className="font-medium">{emailPreviewData.type}</span></div>
+                  <div className="flex justify-between text-sm font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}><span>Total</span><span style={{color:'var(--tn-red)'}}>{emailPreviewData.total}</span></div>
                 </div>
               </div>
-
-              {/* Personal note */}
               <div>
                 <label className="label">Personal note (optional)</label>
-                <textarea className="input" rows={3}
-                  placeholder="Add a personal message..."
+                <textarea className="input" rows={3} placeholder="Add a personal message..."
                   value={editEmailNote} onChange={e=>setEditEmailNote(e.target.value)}
                   style={{resize:'none', minHeight:'80px'}} />
                 <p className="text-xs mt-1" style={{color:'var(--tn-gold)'}}>Appears at the top of the email</p>
               </div>
-
-              {/* Full email body preview */}
               <div className="rounded-xl overflow-hidden" style={{border:'0.5px solid var(--tn-border)'}}>
                 <button onClick={() => setShowEmailBody(p => !p)}
                   className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
@@ -781,15 +712,10 @@ export default function AdminInvoices() {
                   </div>
                 )}
               </div>
-
               <div className="rounded-xl p-3" style={{background:'#EFF6FF'}}>
                 <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Email sent in both French and English</p>
               </div>
-
-              {emailMsg && (
-                <p className="text-xs text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{emailMsg}</p>
-              )}
-
+              {emailMsg && <p className="text-xs text-center font-medium" style={{color:emailMsg.includes('✅')?'#0F6E56':'#991B1B'}}>{emailMsg}</p>}
               <div className="flex gap-2">
                 <button onClick={() => setShowEmailPreview(false)} className="btn btn-outline flex-1 justify-center">Cancel</button>
                 <button onClick={handleSendEmail} disabled={sendingEmail || !editEmailTo}
@@ -802,7 +728,6 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* Generate invoices modal */}
       {showGenerate && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -810,8 +735,6 @@ export default function AdminInvoices() {
               <h2 className="font-semibold text-lg">⚡ Generate invoices</h2>
               <button onClick={() => setShowGenerate(false)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
-
-            {/* Type toggle */}
             <div className="flex gap-1 p-1 rounded-xl mb-4" style={{background:'var(--tn-warm)'}}>
               {[['local','📦 Local'],['contract','🗺️ Contract']].map(([val,label]) => (
                 <button key={val} onClick={() => { setGenType(val); setGenResult(null); }}
@@ -821,20 +744,17 @@ export default function AdminInvoices() {
                 </button>
               ))}
             </div>
-
             <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>
               {genType === 'local'
                 ? 'Creates one invoice per client grouping all their delivered orders in the selected period.'
                 : 'Creates Ontario and Québec contract invoices for Bureau en Gros for the selected week.'}
             </p>
-
             <div className="space-y-3">
               <div className="flex gap-2 mb-1">
                 <button onClick={setCurrentPeriod} className="btn btn-outline btn-sm text-xs">
                   {genType === 'contract' ? 'Previous week' : 'Current period'}
                 </button>
               </div>
-
               {genType === 'local' && (
                 <div>
                   <label className="label">Client</label>
@@ -846,7 +766,6 @@ export default function AdminInvoices() {
                   </select>
                 </div>
               )}
-
               {genType === 'contract' && (
                 <div>
                   <label className="label">Days worked</label>
@@ -855,7 +774,6 @@ export default function AdminInvoices() {
                   </select>
                 </div>
               )}
-
               <div>
                 <label className="label">From</label>
                 <input type="date" className="input" value={genDateFrom} onChange={e=>setGenDateFrom(e.target.value)} />
@@ -865,36 +783,27 @@ export default function AdminInvoices() {
                 <input type="date" className="input" value={genDateTo} onChange={e=>setGenDateTo(e.target.value)} />
               </div>
             </div>
-
             {genResult && (
               <div className="mt-4 rounded-xl p-3" style={{background: genResult.success ? '#E8F5EF' : '#FEE2E2'}}>
                 {genResult.success ? (
                   <>
-                    <p className="text-sm font-medium" style={{color:'#0F6E56'}}>
-                      ✅ {genResult.invoices?.length || 0} invoice{genResult.invoices?.length !== 1 ? 's' : ''} generated!
-                    </p>
+                    <p className="text-sm font-medium" style={{color:'#0F6E56'}}>✅ {genResult.invoices?.length || 0} invoice{genResult.invoices?.length !== 1 ? 's' : ''} generated!</p>
                     {genResult.invoices?.map((inv, i) => (
-                      <p key={i} className="text-xs mt-1" style={{color:'#0F6E56'}}>
-                        #{inv.invoiceId} — {inv.clientName || inv.route} — ${inv.total}
-                      </p>
+                      <p key={i} className="text-xs mt-1" style={{color:'#0F6E56'}}>#{inv.invoiceId} — {inv.clientName || inv.route} — ${inv.total}</p>
                     ))}
-                    {genResult.invoices?.length === 0 && (
-                      <p className="text-xs mt-1" style={{color:'#0F6E56'}}>No orders found for this period.</p>
-                    )}
+                    {genResult.invoices?.length === 0 && <p className="text-xs mt-1" style={{color:'#0F6E56'}}>No orders found for this period.</p>}
                   </>
                 ) : (
                   <p className="text-sm" style={{color:'#991B1B'}}>❌ {genResult.error}</p>
                 )}
               </div>
             )}
-
             <div className="flex gap-2 mt-4">
               <button onClick={() => setShowGenerate(false)} className="btn btn-outline flex-1 justify-center">
                 {genResult?.success ? 'Close' : 'Cancel'}
               </button>
               {!genResult?.success && (
-                <button onClick={handleGenerateInvoices}
-                  disabled={generating || !genDateFrom || !genDateTo}
+                <button onClick={handleGenerateInvoices} disabled={generating || !genDateFrom || !genDateTo}
                   className="btn flex-1 justify-center"
                   style={{background:'var(--tn-red)', color:'white', opacity:generating||!genDateFrom||!genDateTo?0.6:1}}>
                   {generating ? '⏳ Generating...' : '⚡ Generate'}
@@ -905,7 +814,6 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* New invoice modal */}
       {showNew && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -916,14 +824,14 @@ export default function AdminInvoices() {
             <div className="space-y-3">
               <div>
                 <label className="label">Invoice #</label>
-                <input className="input" placeholder="e.g. 599" value={form.invNum}
+                <input className="input" placeholder="e.g. 607" value={form.invNum}
                   onChange={e=>setForm(f=>({...f,invNum:e.target.value}))} />
               </div>
               <div>
                 <label className="label">Type</label>
                 <select className="input" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
-                  <option value="contract">Contract route</option>
                   <option value="local">Local deliveries</option>
+                  <option value="contract">Contract route</option>
                 </select>
               </div>
               {form.type==='contract' && (
@@ -953,11 +861,18 @@ export default function AdminInvoices() {
                     onChange={e=>setForm(f=>({...f,days:parseInt(e.target.value)}))} />
                 </div>
               )}
-              <div>
-                <label className="label">Total amount (with taxes) — leave blank to auto-calculate</label>
-                <input type="number" className="input" placeholder="e.g. 4311.51" step="0.01"
-                  value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} />
-              </div>
+              {form.type==='contract' && (
+                <div>
+                  <label className="label">Total amount (with taxes) — leave blank to auto-calculate</label>
+                  <input type="number" className="input" placeholder="e.g. 4311.51" step="0.01"
+                    value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} />
+                </div>
+              )}
+              {form.type==='local' && (
+                <div className="rounded-xl p-3" style={{background:'#EFF6FF',border:'0.5px solid #185FA5'}}>
+                  <p className="text-xs" style={{color:'#185FA5'}}>ℹ️ For local invoices, amount is calculated automatically from orders. After creating, use <strong>+ Add order</strong> to add orders to this invoice.</p>
+                </div>
+              )}
               <div>
                 <label className="label">Status</label>
                 <select className="input" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
