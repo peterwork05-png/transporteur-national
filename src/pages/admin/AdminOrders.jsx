@@ -400,7 +400,7 @@ export default function AdminOrders() {
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
           <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}} onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
+            <div className="px-6 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)', paddingTop:'max(16px, env(safe-area-inset-top))', paddingBottom:'16px'}}>
               <div>
                 <p className="font-mono text-xs" style={{color:'rgba(250,247,240,0.4)'}}>{selected.id}</p>
                 <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Order details</p>
