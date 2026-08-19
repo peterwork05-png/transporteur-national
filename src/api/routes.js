@@ -290,7 +290,8 @@ router.post('/webhook/woocommerce', async (req, res) => {
     const quantite = parseInt(meta['Quantite'] || lineItemMeta['Quantite'] || '1');
 
     // Get delivery fee from order subtotal (pre-tax, before TPS/TVQ)
-const amount = parseFloat(order.subtotal || order.total) || 0;
+// Pre-tax amount = total minus taxes
+const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
     const boxes = quantite || order.line_items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
 
     // Billing info
