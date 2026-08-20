@@ -1424,6 +1424,8 @@ router.post('/webhook/google-sheets', async (req, res) => {
       order.to_dropoff_date && `Dropoff date: ${order.to_dropoff_date}`,
     ].filter(Boolean).join(' | ');
 
+    const str = (val, max = 100) => String(val || '').substring(0, max);
+
     await pool.query(`
       INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
         billing_email, pickup_location, from_associate_name,
@@ -1432,13 +1434,27 @@ router.post('/webhook/google-sheets', async (req, res) => {
         to_dropoff_date, from_pickup_date)
       VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       ON CONFLICT (id) DO NOTHING
-    `    ], [
-      orderId, clientId, order.address || 'Address pending', 1, 0, notes,
-      order.billing_email || '', String(order.pickup_location || '').substring(0, 255), String(order.from_associate_name || '').substring(0, 100),
-      String(order.to_associate_name || '').substring(0, 100), String(order.to_business_name || '').substring(0, 100), String(order.to_business_phone || '').substring(0, 50),
-      String(order.po_number || '').substring(0, 50), String(order.requested_delivery_time || '').substring(0, 20), String(order.store_number || '').substring(0, 50),
-      String(order.type_boite || '').substring(0, 50), String(order.to_dropoff_date || '').substring(0, 20), String(order.from_pickup_date || '').substring(0, 20),
+    `, [
+      orderId,
+      clientId,
+      str(order.address || 'Address pending', 255),
+      1,
+      0,
+      notes,
+      str(order.billing_email, 100),
+      str(order.pickup_location, 255),
+      str(order.from_associate_name, 100),
+      str(order.to_associate_name, 100),
+      str(order.to_business_name, 100),
+      str(order.to_business_phone, 50),
+      str(order.po_number, 50),
+      str(order.requested_delivery_time, 20),
+      str(order.store_number, 50),
+      str(order.type_boite, 50),
+      str(order.to_dropoff_date, 20),
+      str(order.from_pickup_date, 20),
     ]);
+
     // Notify admins
     try {
       const { notifyAdmins } = await import('./pushNotifications.js');
