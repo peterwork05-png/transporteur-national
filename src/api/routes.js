@@ -1383,6 +1383,76 @@ router.post('/invoices/:id/recalculate', async (req, res) => {
     res.json({ success: true, subtotal, tps, tvq, total });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Google Sheets webhook
+router.post('/webhook/google-sheets', async (req, res) => {
+  try {
+    const order = req.body;
+    console.log('Google Sheets order received:', order.id);
+
+    const orderId = order.id || `DEL-${new Date().getFullYear()}-GS-${Date.now()}`;
+
+    // Try to match client by store number or email
+    let clientId = null;
+    if (order.store_number) {
+      const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${order.store_number}%`]);
+      if (rows.length > 0) clientId = rows[0].id;
+    }
+    if (!clientId && order.billing_email) {
+      const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [order.billing_email]);
+      if (rows.length > 0) clientId = rows[0].id;
+    }
+    if (!clientId) {
+      const clientName = order.to_business_name || order.billing_email || 'Google Sheets Order';
+      const newClientId = `gs_client_${Date.now()}`;
+      await pool.query(`
+        INSERT INTO clients (id, name, email, language, signoff)
+        VALUES ($1, $2, $3, 'fr', 'MERCI DE VOTRE CONFIANCE!')
+        ON CONFLICT (id) DO NOTHING
+      `, [newClientId, clientName, order.billing_email || '']);
+      clientId = newClientId;
+    }
+
+    const notes = [
+      order.notes && `Notes: ${order.notes}`,
+      order.store_number && `Store: ${order.store_number}`,
+      order.po_number && `PO#: ${order.po_number}`,
+      order.type_boite && `Item: ${order.type_boite}`,
+      order.requested_delivery_time && `Requested delivery time: ${order.requested_delivery_time}`,
+      order.from_associate_name && `From: ${order.from_associate_name}${order.from_associate_phone ? ` (${order.from_associate_phone})` : ''}`,
+      order.pickup_location && `Pickup: ${order.pickup_location}`,
+      order.from_pickup_date && `Pickup date: ${order.from_pickup_date}`,
+      order.to_dropoff_date && `Dropoff date: ${order.to_dropoff_date}`,
+    ].filter(Boolean).join(' | ');
+
+    await pool.query(`
+      INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
+        billing_email, pickup_location, from_associate_name,
+        to_associate_name, to_business_name, to_business_phone,
+        po_number, requested_delivery_time, store_number, type_boite,
+        to_dropoff_date, from_pickup_date)
+      VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      ON CONFLICT (id) DO NOTHING
+    `, [
+      orderId, clientId, order.address || 'Address pending', 1, 0, notes,
+      order.billing_email || '', order.pickup_location || '', order.from_associate_name || '',
+      order.to_associate_name || '', order.to_business_name || '', order.to_business_phone || '',
+      order.po_number || '', order.requested_delivery_time || '', order.store_number || '',
+      order.type_boite || '', order.to_dropoff_date || '', order.from_pickup_date || '',
+    ]);
+
+    // Notify admins
+    try {
+      const { notifyAdmins } = await import('./pushNotifications.js');
+      await notifyAdmins('📦 New order (Google Sheets)', `${orderId} · ${order.address}`, { url: '/admin' });
+    } catch(e) {}
+
+    console.log(`✅ Google Sheets order: ${orderId}`);
+    res.json({ success: true, order_id: orderId });
+  } catch(err) {
+    console.error('❌ Google Sheets webhook error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
