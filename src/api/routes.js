@@ -1432,14 +1432,13 @@ router.post('/webhook/google-sheets', async (req, res) => {
         to_dropoff_date, from_pickup_date)
       VALUES ($1,$2,$3,$4,$5,'waiting',CURRENT_DATE,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       ON CONFLICT (id) DO NOTHING
-    `, [
+    `    ], [
       orderId, clientId, order.address || 'Address pending', 1, 0, notes,
-      order.billing_email || '', order.pickup_location || '', order.from_associate_name || '',
-      order.to_associate_name || '', order.to_business_name || '', order.to_business_phone || '',
-      order.po_number || '', order.requested_delivery_time || '', order.store_number || '',
-      order.type_boite || '', order.to_dropoff_date || '', order.from_pickup_date || '',
+      order.billing_email || '', String(order.pickup_location || '').substring(0, 255), String(order.from_associate_name || '').substring(0, 100),
+      String(order.to_associate_name || '').substring(0, 100), String(order.to_business_name || '').substring(0, 100), String(order.to_business_phone || '').substring(0, 50),
+      String(order.po_number || '').substring(0, 50), String(order.requested_delivery_time || '').substring(0, 20), String(order.store_number || '').substring(0, 50),
+      String(order.type_boite || '').substring(0, 50), String(order.to_dropoff_date || '').substring(0, 20), String(order.from_pickup_date || '').substring(0, 20),
     ]);
-
     // Notify admins
     try {
       const { notifyAdmins } = await import('./pushNotifications.js');
