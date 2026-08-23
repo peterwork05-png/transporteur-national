@@ -33,6 +33,56 @@ export default function AdminInvoices() {
   const [editRoute,        setEditRoute]        = useState('ontario');
   const [savingContract,   setSavingContract]   = useState(false);
 
+  // Extra fees state
+  const [invoiceExtras,    setInvoiceExtras]    = useState([]);
+  const [showAddExtra,     setShowAddExtra]     = useState(false);
+  const [extraDesc,        setExtraDesc]        = useState('');
+  const [extraAmount,      setExtraAmount]      = useState('');
+  const [addingExtra,      setAddingExtra]      = useState(false);
+
+  const fetchInvoiceExtras = async (invoiceId) => {
+    try {
+      const res  = await fetch(`/api/invoices/${invoiceId}/extras`);
+      const data = await res.json();
+      setInvoiceExtras(Array.isArray(data) ? data : []);
+    } catch(e) { console.error(e); }
+  };
+
+  const handleAddExtra = async () => {
+    if (!extraDesc || !extraAmount) return;
+    setAddingExtra(true);
+    try {
+      await fetch(`/api/invoices/${selected.id}/extras`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: extraDesc, amount: parseFloat(extraAmount) }),
+      });
+      await fetchInvoiceExtras(selected.id);
+      await fetchInvoices();
+      const res = await fetch('/api/invoices');
+      const data = await res.json();
+      const updated = data.find(i => i.id === selected.id);
+      if (updated) setSelected(prev => ({ ...prev, ...updated }));
+      setExtraDesc('');
+      setExtraAmount('');
+      setShowAddExtra(false);
+    } catch(e) { console.error(e); }
+    setAddingExtra(false);
+  };
+
+  const handleDeleteExtra = async (extraId) => {
+    if (!window.confirm('Remove this extra fee?')) return;
+    try {
+      await fetch(`/api/invoices/${selected.id}/extras/${extraId}`, { method: 'DELETE' });
+      await fetchInvoiceExtras(selected.id);
+      await fetchInvoices();
+      const res = await fetch('/api/invoices');
+      const data = await res.json();
+      const updated = data.find(i => i.id === selected.id);
+      if (updated) setSelected(prev => ({ ...prev, ...updated }));
+    } catch(e) { console.error(e); }
+  };
+
   const handleSaveContractEdit = async () => {
     setSavingContract(true);
     try {
@@ -395,7 +445,7 @@ export default function AdminInvoices() {
           <tbody>
             {filtered.map((inv, i) => (
               <tr key={inv.id}
-                onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else setInvoiceOrders([]); }}
+                onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else { setInvoiceOrders([]); fetchInvoiceExtras(inv.id); } }}
                 className="cursor-pointer hover:opacity-80"
                 style={{borderBottom:'0.5px solid var(--tn-border)', background:i%2===0?'white':'var(--tn-cream)'}}>
                 <td className="px-4 py-3 font-mono text-sm font-semibold" style={{color:'var(--tn-red)'}}>#{inv.id}</td>
@@ -419,7 +469,7 @@ export default function AdminInvoices() {
       <div className="space-y-2 md:hidden">
         {filtered.map(inv => (
           <div key={inv.id} className="card p-4 cursor-pointer"
-            onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else setInvoiceOrders([]); }}>
+            onClick={() => { setSelected(inv); if (inv.type === 'local') fetchInvoiceOrders(inv.id, 'local'); else { setInvoiceOrders([]); fetchInvoiceExtras(inv.id); } }}>
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
@@ -505,6 +555,73 @@ export default function AdminInvoices() {
                   className="btn btn-outline btn-sm w-full justify-center text-xs">
                   ✏️ Edit days / route
                 </button>
+              )}
+
+              {/* Extra fees section — contract only */}
+              {selected.type === 'contract' && (
+                <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium" style={{color:'var(--tn-gold)'}}>➕ Extra fees</p>
+                    <button onClick={() => setShowAddExtra(true)}
+                      className="btn btn-sm text-xs" style={{background:'var(--tn-red)',color:'white'}}>
+                      + Add fee
+                    </button>
+                  </div>
+                  {invoiceExtras.length === 0 ? (
+                    <p className="text-xs text-center py-2" style={{color:'var(--tn-gold)'}}>No extra fees — click + Add fee to add</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {invoiceExtras.map(extra => (
+                        <div key={extra.id} className="flex items-center gap-2 p-2 rounded-lg" style={{background:'white'}}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium">{extra.description}</p>
+                          </div>
+                          <p className="text-xs font-semibold flex-shrink-0">${parseFloat(extra.amount||0).toFixed(2)}</p>
+                          <button onClick={() => handleDeleteExtra(extra.id)}
+                            className="text-xs flex-shrink-0 px-2 py-1 rounded"
+                            style={{background:'#FEE2E2',color:'#991B1B'}}>❌</button>
+                        </div>
+                      ))}
+                      <div className="rounded-lg p-2 text-xs" style={{background:'#FEF3C7',color:'#92400E'}}>
+                        ⚠️ Click <strong>🔄 Regenerate PDF</strong> to update the PDF after changes.
+                      </div>
+                    </div>
+                  )}
+
+                  {showAddExtra && (
+                    <div className="mt-3 rounded-xl p-3" style={{background:'#EFF6FF', border:'0.5px solid #185FA5'}}>
+                      <p className="text-xs font-medium mb-2" style={{color:'#185FA5'}}>New extra fee</p>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="label">Description</label>
+                          <select className="input mb-1" value={extraDesc} onChange={e=>setExtraDesc(e.target.value)}>
+                            <option value="">— Select or type below —</option>
+                            <option value="Extra driver">Extra driver</option>
+                            <option value="Extra truck">Extra truck</option>
+                            <option value="Fuel surcharge">Fuel surcharge</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <input className="input" placeholder="Or type custom description..."
+                            value={extraDesc} onChange={e=>setExtraDesc(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="label">Amount (pre-tax $)</label>
+                          <input type="number" step="0.01" className="input" placeholder="0.00"
+                            value={extraAmount} onChange={e=>setExtraAmount(e.target.value)} />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setShowAddExtra(false); setExtraDesc(''); setExtraAmount(''); }}
+                            className="btn btn-outline flex-1 justify-center text-xs">Cancel</button>
+                          <button onClick={handleAddExtra} disabled={addingExtra || !extraDesc || !extraAmount}
+                            className="btn flex-1 justify-center text-xs"
+                            style={{background:'var(--tn-red)',color:'white',opacity:addingExtra||!extraDesc||!extraAmount?0.6:1}}>
+                            {addingExtra ? '⏳...' : '+ Add'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Contract edit form */}
