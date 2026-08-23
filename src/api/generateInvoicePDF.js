@@ -10,29 +10,48 @@ const ROUTE_LABELS = {
   quebec:  'Québec',
 };
 
-export function generateInvoiceHTML(invoice, orders, clientGroup) {
+export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
   const client     = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: (clientGroup||'').toUpperCase(), address: '' };
   const dateFrom   = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
   const dateTo     = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
   const fmt        = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const isContract = invoice.type === 'contract';
 
+  // Base rate for contract (without extras)
+  const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
+  const baseDays = parseFloat(invoice.days || 5);
+  const baseSubtotal = isContract ? baseRate * baseDays : 0;
+  const extrasTotal = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+
   // For local invoices, calculate totals from orders if not stored in DB
   let subtotal = parseFloat(invoice.subtotal || 0);
   if (!isContract && subtotal === 0 && orders && orders.length > 0) {
     subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
   }
-  const tps   = isContract ? parseFloat(invoice.tps   || 0) : subtotal * 0.05;
-  const tvq   = isContract ? parseFloat(invoice.tvq   || 0) : subtotal * 0.09975;
-  const total = isContract ? parseFloat(invoice.total || 0) : subtotal + tps + tvq;
+  if (isContract) subtotal = baseSubtotal + extrasTotal;
+
+  const tps   = isContract ? subtotal * 0.05  : subtotal * 0.05;
+  const tvq   = isContract ? subtotal * 0.09975 : subtotal * 0.09975;
+  const total = subtotal + tps + tvq;
+
+  // Extra fees rows
+  const extrasRows = (extras || []).map(e => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">—</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${e.description}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">—</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(e.amount)}</td>
+    </tr>
+  `).join('');
 
   const tableRows = isContract ? `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${invoice.days || 5} jours / days</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${invoice.days || 5}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(subtotal)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${baseDays}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(baseSubtotal)}</td>
     </tr>
+    ${extrasRows}
   ` : (orders || []).map(o => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${o.date ? new Date(o.date).toISOString().split('T')[0] : ''}</td>
