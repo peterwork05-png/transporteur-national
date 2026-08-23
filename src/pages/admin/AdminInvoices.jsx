@@ -27,6 +27,39 @@ export default function AdminInvoices() {
   const [generating,    setGenerating]    = useState(false);
   const [genResult,     setGenResult]     = useState(null);
 
+  // Contract invoice edit state
+  const [showEditContract, setShowEditContract] = useState(false);
+  const [editDays,         setEditDays]         = useState(5);
+  const [editRoute,        setEditRoute]        = useState('ontario');
+  const [savingContract,   setSavingContract]   = useState(false);
+
+  const handleSaveContractEdit = async () => {
+    setSavingContract(true);
+    try {
+      const rate = CONTRACT_RATES[editRoute]?.daily || CONTRACT_RATES[editRoute] || 0;
+      const subtotal = rate * editDays;
+      const tps   = subtotal * TPS;
+      const tvq   = subtotal * TVQ;
+      const total = subtotal + tps + tvq;
+      await fetch(`/api/invoices/${selected.id}/edit-contract`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          days: editDays,
+          route: editRoute,
+          subtotal: subtotal.toFixed(2),
+          tps: tps.toFixed(2),
+          tvq: tvq.toFixed(2),
+          total: total.toFixed(2),
+        }),
+      });
+      await fetchInvoices();
+      setSelected(prev => ({ ...prev, days: editDays, route: editRoute, subtotal: subtotal.toFixed(2), tps: tps.toFixed(2), tvq: tvq.toFixed(2), total: total.toFixed(2), amount: total }));
+      setShowEditContract(false);
+    } catch(e) { console.error(e); }
+    setSavingContract(false);
+  };
+
   const handleGenerateInvoices = async () => {
     if (!genDateFrom || !genDateTo) return;
     setGenerating(true);
@@ -159,7 +192,6 @@ export default function AdminInvoices() {
       const res  = await fetch(`/api/invoices/${invoiceId}/orders`);
       const data = await res.json();
       setInvoiceOrders(data.orders || []);
-      // Auto-recalculate and save totals for local invoices
       if (invoiceType === 'local') {
         await fetch(`/api/invoices/${invoiceId}/recalculate`, { method: 'POST' });
         await fetchInvoices();
@@ -351,7 +383,6 @@ export default function AdminInvoices() {
         </select>
       </div>
 
-      {/* Desktop table */}
       <div className="card overflow-hidden hidden md:block">
         <table className="w-full">
           <thead>
@@ -385,7 +416,6 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="text-center py-12 text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
-      {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {filtered.map(inv => (
           <div key={inv.id} className="card p-4 cursor-pointer"
@@ -407,13 +437,12 @@ export default function AdminInvoices() {
         {filtered.length===0 && <div className="card p-8 text-center text-sm" style={{color:'var(--tn-gold)'}}>No invoices found</div>}
       </div>
 
-      {/* Invoice detail modal */}
       {selected && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
           style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelected(null)}>
           <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto"
             style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
-            <div className="px-6 py-4 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)'}}>
+            <div className="px-6 flex items-center justify-between sticky top-0" style={{background:'var(--tn-dark)', paddingTop:'max(16px, env(safe-area-inset-top))', paddingBottom:'16px'}}>
               <div>
                 <p className="font-mono text-xs" style={{color:'rgba(250,247,240,0.4)'}}>Invoice #{selected.id}</p>
                 <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Invoice details</p>
@@ -469,6 +498,59 @@ export default function AdminInvoices() {
                   </div>
                 ))}
               </div>
+
+              {/* Contract invoice edit button */}
+              {selected.type === 'contract' && (
+                <button onClick={() => { setEditDays(selected.days || 5); setEditRoute(selected.route || 'ontario'); setShowEditContract(true); }}
+                  className="btn btn-outline btn-sm w-full justify-center text-xs">
+                  ✏️ Edit days / route
+                </button>
+              )}
+
+              {/* Contract edit form */}
+              {showEditContract && selected.type === 'contract' && (
+                <div className="rounded-xl p-4" style={{background:'#EFF6FF', border:'0.5px solid #185FA5'}}>
+                  <p className="text-xs font-medium mb-3" style={{color:'#185FA5'}}>✏️ Edit contract invoice</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label">Route</label>
+                      <select className="input" value={editRoute} onChange={e=>setEditRoute(e.target.value)}>
+                        <option value="ontario">Ontario / Gatineau ($749.99/day)</option>
+                        <option value="quebec">Québec ($585.00/day)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Days worked</label>
+                      <select className="input" value={editDays} onChange={e=>setEditDays(parseInt(e.target.value))}>
+                        {[1,2,3,4,5,6].map(d => <option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
+                      </select>
+                    </div>
+                    {(() => {
+                      const rate = CONTRACT_RATES[editRoute]?.daily || CONTRACT_RATES[editRoute] || 0;
+                      const sub = rate * editDays;
+                      const tps = sub * TPS;
+                      const tvq = sub * TVQ;
+                      const total = sub + tps + tvq;
+                      return (
+                        <div className="rounded-lg p-3 text-xs space-y-1" style={{background:'white'}}>
+                          <div className="flex justify-between"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span>{fmt(sub)}</span></div>
+                          <div className="flex justify-between"><span style={{color:'var(--tn-gold)'}}>TPS 5%</span><span>{fmt(tps)}</span></div>
+                          <div className="flex justify-between"><span style={{color:'var(--tn-gold)'}}>TVQ 9.975%</span><span>{fmt(tvq)}</span></div>
+                          <div className="flex justify-between font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)'}}><span>Total</span><span style={{color:'var(--tn-red)'}}>{fmt(total)}</span></div>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowEditContract(false)} className="btn btn-outline flex-1 justify-center text-xs">Cancel</button>
+                      <button onClick={handleSaveContractEdit} disabled={savingContract}
+                        className="btn flex-1 justify-center text-xs"
+                        style={{background:'var(--tn-red)', color:'white', opacity:savingContract?0.6:1}}>
+                        {savingContract ? '⏳ Saving...' : '💾 Save & recalculate'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
                 <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
@@ -634,7 +716,6 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* Email preview modal */}
       {showEmailPreview && emailPreviewData && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.7)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -717,7 +798,6 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* Generate invoices modal */}
       {showGenerate && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -760,7 +840,7 @@ export default function AdminInvoices() {
                 <div>
                   <label className="label">Days worked</label>
                   <select className="input" value={genDays} onChange={e=>setGenDays(parseInt(e.target.value))}>
-                    {[1,2,3,4,5].map(d => <option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
+                    {[1,2,3,4,5,6].map(d => <option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
                   </select>
                 </div>
               )}
@@ -804,7 +884,6 @@ export default function AdminInvoices() {
         </div>
       )}
 
-      {/* New invoice modal */}
       {showNew && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
           <div className="rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" style={{background:'var(--tn-cream)'}}>
@@ -848,8 +927,9 @@ export default function AdminInvoices() {
               {form.type==='contract' && (
                 <div>
                   <label className="label">Days driven</label>
-                  <input type="number" className="input" value={form.days} min={1} max={5}
-                    onChange={e=>setForm(f=>({...f,days:parseInt(e.target.value)}))} />
+                  <select className="input" value={form.days} onChange={e=>setForm(f=>({...f,days:parseInt(e.target.value)}))}>
+                    {[1,2,3,4,5,6].map(d => <option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
+                  </select>
                 </div>
               )}
               {form.type==='contract' && (
