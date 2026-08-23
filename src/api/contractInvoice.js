@@ -1,8 +1,6 @@
 import pool from '../db/index.js';
-
 const TPS = 0.05;
 const TVQ = 0.09975;
-
 const CONTRACT_RATES = {
   ontario: { daily: 749.99, client_id: 'beg_ops', route: 'ontario' },
   quebec:  { daily: 585.00, client_id: 'beg_ops', route: 'quebec'  },
@@ -12,13 +10,10 @@ const CONTRACT_RATES = {
 export function getPreviousWeekDates(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay(); // 0=Sun, 1=Mon...
-  // Go back to last Monday
   const monday = new Date(d);
   monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  // Friday is 4 days after Monday
   const friday = new Date(monday);
   friday.setDate(monday.getDate() + 4);
-
   return {
     from: monday.toISOString().split('T')[0],
     to:   friday.toISOString().split('T')[0],
@@ -30,8 +25,19 @@ export async function generateContractInvoices(dateFrom, dateTo, days = 5) {
   try {
     console.log(`📄 Generating contract invoices from ${dateFrom} to ${dateTo} (${days} days)`);
     const results = [];
-
     for (const [routeName, config] of Object.entries(CONTRACT_RATES)) {
+
+      // Check if invoice already exists for this route and period
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM invoices WHERE type='contract' AND route=$1 AND date_from=$2 AND date_to=$3`,
+        [routeName, dateFrom, dateTo]
+      );
+      if (existing.length > 0) {
+        console.log(`⚠️ Contract invoice already exists for ${routeName} ${dateFrom}-${dateTo}, skipping`);
+        results.push({ invoiceId: existing[0].id, route: routeName, skipped: true });
+        continue;
+      }
+
       const subtotal = config.daily * days;
       const tps      = subtotal * TPS;
       const tvq      = subtotal * TVQ;
@@ -57,10 +63,8 @@ export async function generateContractInvoices(dateFrom, dateTo, days = 5) {
         total:      total.toFixed(2),
         period:     `${dateFrom} – ${dateTo}`,
       });
-
       console.log(`✅ Contract invoice #${inv[0].id} for ${routeName}: $${total.toFixed(2)} (${days} days)`);
     }
-
     return { success: true, invoices: results };
   } catch(err) {
     console.error('Contract invoice error:', err);
