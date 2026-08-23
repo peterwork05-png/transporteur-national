@@ -48,8 +48,12 @@ export function startScheduler() {
 }
 
 function isDST(date) {
-  const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset();
-  const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
-  return Math.max(jan, jul) !== date.getTimezoneOffset();
+  // Railway runs in UTC — manually check if current date falls in EDT (DST)
+  // EDT runs from second Sunday in March to first Sunday in November
+  const year = date.getUTCFullYear();
+  const startDST = new Date(Date.UTC(year, 2, 8)); // March 8
+  while (startDST.getUTCDay() !== 0) startDST.setUTCDate(startDST.getUTCDate() + 1);
+  const endDST = new Date(Date.UTC(year, 10, 1)); // November 1
+  while (endDST.getUTCDay() !== 0) endDST.setUTCDate(endDST.getUTCDate() + 1);
+  return date >= startDST && date < endDST;
 }
-
