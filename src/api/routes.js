@@ -961,13 +961,15 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
         orders = rows;
       }
     }
-    const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    // Fetch extras for contract invoices
-    const extrasResult = await pool.query(
-      `SELECT * FROM invoice_extras WHERE invoice_id = $1 ORDER BY created_at ASC`,
-      [req.params.id]
-    ).catch(() => ({ rows: [] }));
-    const extras = extrasResult.rows || [];
+        const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
+    let extras = [];
+    try {
+      const extrasResult = await pool.query(
+        `SELECT * FROM invoice_extras WHERE invoice_id = $1 ORDER BY created_at ASC`,
+        [req.params.id]
+      );
+      extras = extrasResult.rows || [];
+    } catch(e) { extras = []; }
     const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id, extras);
     const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
       method: 'POST',
