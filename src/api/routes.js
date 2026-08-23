@@ -1468,6 +1468,17 @@ router.post('/webhook/google-sheets', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Edit contract invoice days/route
+router.patch('/invoices/:id/edit-contract', async (req, res) => {
+  try {
+    const { days, route, subtotal, tps, tvq, total } = req.body;
+    await pool.query(
+      `UPDATE invoices SET days=$1, route=$2, subtotal=$3, tps=$4, tvq=$5, total=$6 WHERE id=$7`,
+      [days, route, subtotal, tps, tvq, total, req.params.id]
+    );
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
