@@ -912,8 +912,14 @@ router.get('/invoices/:id/preview', async (req, res) => {
       }
     }
 
-    const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id);
+        const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
+    // Fetch extras for contract invoices
+    const extrasResult = await pool.query(
+      `SELECT * FROM invoice_extras WHERE invoice_id = $1 ORDER BY created_at ASC`,
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    const extras = extrasResult.rows || [];
+    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id, extras);
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch(err) {
@@ -953,7 +959,13 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
       }
     }
     const { generateInvoiceHTML } = await import('./generateInvoicePDF.js');
-    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id);
+    // Fetch extras for contract invoices
+    const extrasResult = await pool.query(
+      `SELECT * FROM invoice_extras WHERE invoice_id = $1 ORDER BY created_at ASC`,
+      [req.params.id]
+    ).catch(() => ({ rows: [] }));
+    const extras = extrasResult.rows || [];
+    const html = generateInvoiceHTML(inv, orders, inv.client_group || inv.client_id, extras);
     const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
       method: 'POST',
       headers: {
@@ -962,6 +974,7 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
       },
       body: JSON.stringify({ source: html, landscape: false, use_print: false }),
     });
+    
     if (!pdfRes.ok) throw new Error(`PDFShift error: ${await pdfRes.text()}`);
     const pdfBuffer = await pdfRes.arrayBuffer();
     const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
