@@ -1479,6 +1479,71 @@ router.patch('/invoices/:id/edit-contract', async (req, res) => {
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Get extra fees for an invoice
+router.get('/invoices/:id/extras', async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS invoice_extras (
+      id SERIAL PRIMARY KEY,
+      invoice_id INTEGER NOT NULL,
+      description VARCHAR(200) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    const { rows } = await pool.query(
+      `SELECT * FROM invoice_extras WHERE invoice_id = $1 ORDER BY created_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add extra fee to invoice
+router.post('/invoices/:id/extras', async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS invoice_extras (
+      id SERIAL PRIMARY KEY,
+      invoice_id INTEGER NOT NULL,
+      description VARCHAR(200) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    const { description, amount } = req.body;
+    await pool.query(
+      `INSERT INTO invoice_extras (invoice_id, description, amount) VALUES ($1, $2, $3)`,
+      [req.params.id, description, parseFloat(amount)]
+    );
+    // Recalculate invoice total
+    await recalcContractInvoice(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete extra fee
+router.delete('/invoices/:id/extras/:extraId', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM invoice_extras WHERE id = $1 AND invoice_id = $2`,
+      [req.params.extraId, req.params.id]);
+    await recalcContractInvoice(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Recalculate contract invoice totals including extras
+async function recalcContractInvoice(invoiceId) {
+  const { rows: inv } = await pool.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId]);
+  if (!inv.length) return;
+  const { rows: extras } = await pool.query(`SELECT * FROM invoice_extras WHERE invoice_id = $1`, [invoiceId]);
+  const extrasTotal = extras.reduce((s, e) => s + parseFloat(e.amount), 0);
+  const baseSubtotal = parseFloat(inv[0].days || 5) * (inv[0].route === 'ontario' ? 749.99 : 585.00);
+  const subtotal = baseSubtotal + extrasTotal;
+  const tps = subtotal * 0.05;
+  const tvq = subtotal * 0.09975;
+  const total = subtotal + tps + tvq;
+  await pool.query(
+    `UPDATE invoices SET subtotal=$1, tps=$2, tvq=$3, total=$4 WHERE id=$5`,
+    [subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2), invoiceId]
+  );
+}
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
