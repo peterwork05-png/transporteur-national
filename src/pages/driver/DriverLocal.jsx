@@ -4,9 +4,9 @@ import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
-const STATUS_RANK  = { waiting:0, picked:1, enroute:2, delivered:3, attempted:2 };
-const STATUS_LABEL = { waiting:'Awaiting pickup', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
-const STATUS_COLOR = { waiting:'badge-gray', picked:'badge-warning', enroute:'badge-info', delivered:'badge-success', attempted:'badge-danger' };
+const STATUS_RANK  = { waiting:0, accepted:1, picked:2, enroute:3, delivered:4, attempted:3 };
+const STATUS_LABEL = { waiting:'Awaiting pickup', accepted:'Accepted', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
+const STATUS_COLOR = { waiting:'badge-gray', accepted:'badge-info', picked:'badge-warning', enroute:'badge-info', delivered:'badge-success', attempted:'badge-danger' };
 
 export default function DriverLocal() {
   const { driverId } = useParams();
@@ -51,6 +51,7 @@ export default function DriverLocal() {
           ...o,
           clientName:      o.client_name || o.to_business_name || o.billing_name || o.client_id || '—',
           toAssociateName: o.to_associate_name  || '',
+          toBusinessName:  o.to_business_name   || '',
           toBusinessPhone: o.to_business_phone  || '',
           requestedTime:   o.requested_delivery_time || '',
           pickupLocation:  o.pickup_location    || '',
@@ -96,16 +97,14 @@ export default function DriverLocal() {
     }
   }, []);
 
-  useEffect(() => {
-    return () => stopLocationSharing();
-  }, []);
+  useEffect(() => { return () => stopLocationSharing(); }, []);
 
   const delivered = orders.filter(o => o.status === 'delivered').length;
-  const remaining = orders.filter(o => o.status !== 'delivered').length;
+  const remaining = orders.filter(o => !['delivered','attempted'].includes(o.status)).length;
 
   const filteredOrders = orders.filter(o => {
     if (filter === 'delivered') return o.status === 'delivered';
-    if (filter === 'remaining') return o.status !== 'delivered';
+    if (filter === 'remaining') return !['delivered','attempted'].includes(o.status);
     return true;
   });
 
@@ -122,13 +121,20 @@ export default function DriverLocal() {
     } catch(e) { console.error(e); }
   };
 
-  const pickUp = id => updateStatus(id, 'picked', { picked_up_at: now() });
+  const acceptOrder = id => updateStatus(id, 'accepted');
+  const pickUp      = id => updateStatus(id, 'picked', { picked_up_at: now() });
 
   const startDelivery = id => {
     if (activeEnroute) return alert('Finish current delivery first');
     setActiveEnroute(id);
     updateStatus(id, 'enroute', { on_way_at: now() });
     startLocationSharing();
+  };
+
+  const cancelEnroute = id => {
+    setActiveEnroute(null);
+    updateStatus(id, 'picked');
+    stopLocationSharing();
   };
 
   const openProof = id => {
@@ -203,6 +209,18 @@ export default function DriverLocal() {
     stopLocationSharing();
   };
 
+  const openGoogleMaps = (order) => {
+    const pickup = order.pickupLocation || order.fromName;
+    const dropoff = order.address;
+    if (pickup && dropoff) {
+      const url = `https://www.google.com/maps/dir/${encodeURIComponent(pickup)}/${encodeURIComponent(dropoff)}`;
+      window.open(url, '_blank');
+    } else if (dropoff) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dropoff)}`;
+      window.open(url, '_blank');
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{background:'var(--tn-dark)'}}>
       <div className="text-center">
@@ -235,18 +253,8 @@ export default function DriverLocal() {
             )}
             <p className="text-sm font-semibold tabular-nums" style={{color:'var(--tn-gold)'}}>{format(new Date(),'hh:mm a')}</p>
             <button onClick={() => window.location.href = '/'}
-              style={{
-                minWidth:'44px', minHeight:'44px',
-                background:'rgba(250,247,240,0.08)',
-                color:'rgba(250,247,240,0.5)',
-                border:'0.5px solid rgba(139,105,20,0.2)',
-                borderRadius:'10px',
-                fontSize:'18px',
-                display:'flex', alignItems:'center', justifyContent:'center',
-              }}
-              title="Sign out">
-              🚪
-            </button>
+              style={{minWidth:'44px',minHeight:'44px',background:'rgba(250,247,240,0.08)',color:'rgba(250,247,240,0.5)',border:'0.5px solid rgba(139,105,20,0.2)',borderRadius:'10px',fontSize:'18px',display:'flex',alignItems:'center',justifyContent:'center'}}
+              title="Sign out">🚪</button>
           </div>
         </div>
       </div>
@@ -319,7 +327,10 @@ export default function DriverLocal() {
                   <div className="p-4 cursor-pointer" onClick={() => setExpanded(isExp ? null : order.id)}>
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{order.clientName}</p>
+                        <p className="font-semibold text-sm">{order.toBusinessName || order.clientName}</p>
+                        {order.toBusinessName && order.toAssociateName && (
+                          <p className="text-xs" style={{color:'var(--tn-gold)'}}>{order.toAssociateName}</p>
+                        )}
                         <p className="text-xs mt-0.5 truncate" style={{color:'var(--tn-gold)'}}>{order.address}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <p className="text-xs" style={{color:'rgba(139,105,20,0.6)'}}>{order.boxes} box{order.boxes>1?'es':''}</p>
@@ -334,13 +345,13 @@ export default function DriverLocal() {
                     </div>
 
                     <div className="flex items-center gap-0 mt-3">
-                      {['Assigned','Picked up','En route','Delivered'].map((step,si) => (
+                      {['Assigned','Accepted','Picked','En route','Delivered'].map((step,si) => (
                         <div key={step} className="flex items-center flex-1 last:flex-none">
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 text-white"
                             style={{background:si<=rank?'var(--tn-red)':'var(--tn-warm)'}}>
                             {si<=rank?'✓':<span style={{color:'var(--tn-gold)',fontSize:'10px'}}>{si+1}</span>}
                           </div>
-                          {si<3&&<div className="flex-1 h-0.5" style={{background:si<rank?'var(--tn-red)':'var(--tn-warm)'}}/>}
+                          {si<4&&<div className="flex-1 h-0.5" style={{background:si<rank?'var(--tn-red)':'var(--tn-warm)'}}/>}
                         </div>
                       ))}
                     </div>
@@ -351,6 +362,12 @@ export default function DriverLocal() {
                       <div className="rounded-xl p-3 mt-3" style={{background:'var(--tn-warm)'}}>
                         <p className="text-xs mb-0.5" style={{color:'var(--tn-gold)'}}>📍 Delivery address</p>
                         <p className="font-medium text-sm">{order.address}</p>
+                        {/* Google Maps button */}
+                        <button onClick={() => openGoogleMaps(order)}
+                          className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium"
+                          style={{background:'#185FA5',color:'white'}}>
+                          🗺️ Start on Google Maps
+                        </button>
                       </div>
                       {(order.toAssociateName||order.toBusinessPhone) && (
                         <div className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
@@ -387,13 +404,23 @@ export default function DriverLocal() {
                     </div>
                   )}
 
-                  <div className="px-4 pb-4">
+                  <div className="px-4 pb-4 space-y-2">
                     {order.status==='waiting'&&(
-                      <button onClick={()=>pickUp(order.id)} className="btn btn-sm w-full justify-center" style={{background:'var(--tn-gold)',color:'white'}}>📦 Mark as picked up</button>
+                      <button onClick={()=>acceptOrder(order.id)} className="btn btn-sm w-full justify-center"
+                        style={{background:'#185FA5',color:'white'}}>
+                        ✅ Accept order
+                      </button>
+                    )}
+                    {order.status==='accepted'&&(
+                      <button onClick={()=>pickUp(order.id)} className="btn btn-sm w-full justify-center"
+                        style={{background:'var(--tn-gold)',color:'white'}}>
+                        📦 Mark as picked up
+                      </button>
                     )}
                     {order.status==='picked'&&(
                       <button onClick={()=>startDelivery(order.id)} disabled={!!activeEnroute&&activeEnroute!==order.id}
-                        className="btn btn-sm w-full justify-center" style={{background:'var(--tn-red)',color:'white',opacity:activeEnroute&&activeEnroute!==order.id?0.4:1}}>
+                        className="btn btn-sm w-full justify-center"
+                        style={{background:'var(--tn-red)',color:'white',opacity:activeEnroute&&activeEnroute!==order.id?0.4:1}}>
                         🚚 On my way
                       </button>
                     )}
@@ -403,6 +430,10 @@ export default function DriverLocal() {
                         <button onClick={()=>openAttempted(order.id)} className="btn btn-sm flex-shrink-0 px-3"
                           style={{background:'#FEF3C7',color:'#92400E',border:'0.5px solid #D97706'}}>
                           ⚠️ Attempted
+                        </button>
+                        <button onClick={()=>cancelEnroute(order.id)} className="btn btn-sm flex-shrink-0 px-3"
+                          style={{background:'rgba(139,105,20,0.15)',color:'var(--tn-gold)',border:'0.5px solid var(--tn-gold)'}}>
+                          ↩ Back
                         </button>
                       </div>
                     )}
@@ -449,7 +480,7 @@ export default function DriverLocal() {
               <button onClick={()=>setShowAttempted(null)} className="text-xl" style={{color:'var(--tn-gold)'}}>×</button>
             </div>
             <div className="rounded-xl p-3 mb-4" style={{background:'#FEF3C7',border:'0.5px solid #D97706'}}>
-              <p className="text-sm" style={{color:'#92400E'}}>The recipient was not available. This order will be marked as attempted delivery. You will still be charged for this delivery.</p>
+              <p className="text-sm" style={{color:'#92400E'}}>The recipient was not available. This order will be marked as attempted delivery.</p>
             </div>
             <div className="mb-4">
               <label className="label">Reason / note (optional)</label>
@@ -501,31 +532,21 @@ export default function DriverLocal() {
                       <span className="text-sm font-medium" style={{color:'var(--tn-gold)'}}>Tap to open camera</span>
                       <span className="text-xs" style={{color:'rgba(139,105,20,0.5)'}}>Or select from gallery</span>
                     </label>
-                    <input
-                      id="camera-input"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
+                    <input id="camera-input" type="file" accept="image/*" className="hidden"
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          setPhotoTaken(true);
-                          setPhotoDataUrl(ev.target.result);
-                        };
+                        reader.onload = (ev) => { setPhotoTaken(true); setPhotoDataUrl(ev.target.result); };
                         reader.readAsDataURL(file);
                         setPhotoFile(file);
-                      }}
-                    />
+                      }}/>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <img src={photoDataUrl} alt="Delivery" className="w-full rounded-xl object-cover" style={{maxHeight:'220px'}}/>
                     <button onClick={() => { setPhotoTaken(false); setPhotoDataUrl(null); setPhotoFile(null); }}
-                      className="btn btn-outline btn-sm w-full justify-center text-xs">
-                      📷 Retake photo
-                    </button>
+                      className="btn btn-outline btn-sm w-full justify-center text-xs">📷 Retake photo</button>
                   </div>
                 )}
                 <button disabled={!photoTaken} onClick={()=>setProofStep(2)} className="btn w-full justify-center mt-4"
@@ -540,11 +561,7 @@ export default function DriverLocal() {
                 <p className="font-medium text-sm mb-3">Recipient signature</p>
                 <input className="input mb-3" placeholder="Received by (full name)" value={recipientName} onChange={e=>setRecipientName(e.target.value)}/>
                 <p className="text-xs mb-2" style={{color:'var(--tn-gold)'}}>Sign below with finger:</p>
-                <canvas
-                  ref={sigCanvasRef}
-                  width={340}
-                  height={140}
-                  className="w-full rounded-xl"
+                <canvas ref={sigCanvasRef} width={340} height={140} className="w-full rounded-xl"
                   style={{border:'0.5px solid var(--tn-border-strong)',background:'white',touchAction:'none',cursor:'crosshair'}}
                   onPointerDown={(e) => {
                     const canvas = sigCanvasRef.current;
@@ -553,12 +570,9 @@ export default function DriverLocal() {
                     const scaleX = canvas.width / rect.width;
                     const scaleY = canvas.height / rect.height;
                     ctx.beginPath();
-                    ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
-                    ctx.lineWidth = 2.5;
-                    ctx.strokeStyle = '#1A1208';
-                    ctx.lineCap = 'round';
-                    canvas.isDrawing = true;
-                    setSigDrawn(true);
+                    ctx.moveTo((e.clientX-rect.left)*scaleX,(e.clientY-rect.top)*scaleY);
+                    ctx.lineWidth=2.5; ctx.strokeStyle='#1A1208'; ctx.lineCap='round';
+                    canvas.isDrawing=true; setSigDrawn(true);
                   }}
                   onPointerMove={(e) => {
                     const canvas = sigCanvasRef.current;
@@ -567,34 +581,26 @@ export default function DriverLocal() {
                     const rect = canvas.getBoundingClientRect();
                     const scaleX = canvas.width / rect.width;
                     const scaleY = canvas.height / rect.height;
-                    ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+                    ctx.lineTo((e.clientX-rect.left)*scaleX,(e.clientY-rect.top)*scaleY);
                     ctx.stroke();
                   }}
-                  onPointerUp={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing = false; }}
-                  onPointerLeave={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing = false; }}
+                  onPointerUp={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing=false; }}
+                  onPointerLeave={() => { if (sigCanvasRef.current) sigCanvasRef.current.isDrawing=false; }}
                 />
                 {sigDrawn && (
-                  <button onClick={() => {
-                    const canvas = sigCanvasRef.current;
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    setSigDrawn(false);
-                  }} className="btn btn-outline btn-sm mt-2 text-xs">
-                    ✕ Clear signature
-                  </button>
+                  <button onClick={() => { const canvas=sigCanvasRef.current; canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); setSigDrawn(false); }}
+                    className="btn btn-outline btn-sm mt-2 text-xs">✕ Clear signature</button>
                 )}
                 <div className="flex gap-2 mt-4">
                   <button onClick={()=>setProofStep(1)} className="btn btn-outline">← Back</button>
                   <button disabled={!sigDrawn||!recipientName} onClick={()=>{
                     if (sigCanvasRef.current) {
-                      const canvas = sigCanvasRef.current;
-                      const exportCanvas = document.createElement('canvas');
-                      exportCanvas.width = canvas.width;
-                      exportCanvas.height = canvas.height;
-                      const ctx = exportCanvas.getContext('2d');
-                      ctx.fillStyle = 'white';
-                      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-                      ctx.drawImage(canvas, 0, 0);
+                      const canvas=sigCanvasRef.current;
+                      const exportCanvas=document.createElement('canvas');
+                      exportCanvas.width=canvas.width; exportCanvas.height=canvas.height;
+                      const ctx=exportCanvas.getContext('2d');
+                      ctx.fillStyle='white'; ctx.fillRect(0,0,exportCanvas.width,exportCanvas.height);
+                      ctx.drawImage(canvas,0,0);
                       setSigDataUrl(exportCanvas.toDataURL('image/png'));
                     }
                     setProofStep(3);
@@ -609,9 +615,7 @@ export default function DriverLocal() {
             {proofStep===3&&(
               <div>
                 <p className="font-medium text-sm mb-3">Review & confirm</p>
-                {photoDataUrl && (
-                  <img src={photoDataUrl} alt="Delivery" className="w-full rounded-xl object-cover mb-3" style={{maxHeight:'150px'}}/>
-                )}
+                {photoDataUrl && <img src={photoDataUrl} alt="Delivery" className="w-full rounded-xl object-cover mb-3" style={{maxHeight:'150px'}}/>}
                 {[
                   {icon:'📷', label:'Delivery photo', sub:'Photo captured ✓'},
                   {icon:'✍️', label:'Signature',       sub:`Signed by: ${recipientName}`},
@@ -624,9 +628,7 @@ export default function DriverLocal() {
                 ))}
                 <div className="flex gap-2 mt-3">
                   <button onClick={()=>setProofStep(2)} className="btn btn-outline">← Back</button>
-                  <button onClick={submitDelivery} className="btn btn-success flex-1 justify-center">
-                    ✓ Submit & mark delivered
-                  </button>
+                  <button onClick={submitDelivery} className="btn btn-success flex-1 justify-center">✓ Submit & mark delivered</button>
                 </div>
               </div>
             )}
