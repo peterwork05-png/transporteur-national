@@ -221,7 +221,7 @@ export default function AdminOrders() {
 
   // Fix #8 — mark delivered from admin and refresh properly
   const markDelivered = async () => {
-    const now = new Date().toLocaleString('en-CA');
+    const now = new Date().toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true });
     await fetch(`/api/orders/${selected.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
