@@ -418,12 +418,19 @@ export default function DriverLocal() {
                       </button>
                     )}
                     {order.status==='picked'&&(
-                      <button onClick={()=>startDelivery(order.id)} disabled={!!activeEnroute&&activeEnroute!==order.id}
-                        className="btn btn-sm w-full justify-center"
-                        style={{background:'var(--tn-red)',color:'white',opacity:activeEnroute&&activeEnroute!==order.id?0.4:1}}>
-                        🚚 On my way
-                      </button>
-                    )}
+  <div className="flex gap-2">
+    <button onClick={()=>startDelivery(order.id)} disabled={!!activeEnroute&&activeEnroute!==order.id}
+      className="btn btn-sm flex-1 justify-center"
+      style={{background:'var(--tn-red)',color:'white',opacity:activeEnroute&&activeEnroute!==order.id?0.4:1}}>
+      🚚 On my way
+    </button>
+    <button onClick={()=>updateStatus(order.id,'accepted')}
+      className="btn btn-sm flex-shrink-0 px-3"
+      style={{background:'rgba(139,105,20,0.15)',color:'var(--tn-gold)',border:'0.5px solid var(--tn-gold)'}}>
+      ↩ Back
+    </button>
+  </div>
+)}
                     {order.status==='enroute'&&(
                       <div className="flex gap-2">
                         <button onClick={()=>openProof(order.id)} className="btn btn-success btn-sm flex-1 justify-center">✓ Mark delivered</button>
