@@ -56,7 +56,7 @@ export default function ClientPortal() {
     setAuthLoad(true);
     setAuthError('');
     try {
-      const res  = await fetch('/api/clients/login', {
+      const res = await fetch('/api/auth/client-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
