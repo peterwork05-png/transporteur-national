@@ -3,23 +3,35 @@ import { useParams, useNavigate } from 'react-router-dom';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
+function loadMapbox() {
+  return new Promise((resolve) => {
+    if (window.mapboxgl) { resolve(window.mapboxgl); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+    script.onload = () => resolve(window.mapboxgl);
+    document.head.appendChild(script);
+  });
+}
+
 export default function ClientTracking() {
   const { orderId } = useParams();
   const navigate    = useNavigate();
   const mapRef      = useRef(null);
   const mapInstance = useRef(null);
   const markerRef   = useRef(null);
-  const [status,    setStatus]    = useState('Loading...');
-  const [lastSeen,  setLastSeen]  = useState(null);
-  const [order,     setOrder]     = useState(null);
+  const [status,   setStatus]   = useState('Loading...');
+  const [lastSeen, setLastSeen] = useState(null);
+  const [order,    setOrder]    = useState(null);
 
   useEffect(() => {
     let map;
     const initMap = async () => {
-      const mapboxgl = (await import('mapbox-gl')).default;
-      await import('mapbox-gl/dist/mapbox-gl.css');
+      const mapboxgl = await loadMapbox();
       mapboxgl.accessToken = MAPBOX_TOKEN;
-
       map = new mapboxgl.Map({
         container: mapRef.current,
         style: 'mapbox://styles/mapbox/streets-v12',
@@ -50,7 +62,7 @@ export default function ClientTracking() {
             if (markerRef.current) {
               markerRef.current.setLngLat([lng, lat]);
             } else {
-              const mapboxgl = (await import('mapbox-gl')).default;
+              const mapboxgl = await loadMapbox();
               const el = document.createElement('div');
               el.innerHTML = '🚚';
               el.style.fontSize = '28px';
