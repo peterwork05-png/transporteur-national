@@ -1393,6 +1393,11 @@ router.post('/invoices/:id/recalculate', async (req, res) => {
       orders = rows;
     }
 
+        // Only recalculate if orders exist — don't zero out manual invoices
+    if (orders.length === 0) {
+      console.log(`⚠️ No orders for invoice ${invoiceId} — skipping recalculate to preserve manual amount`);
+      return;
+    }
     const subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
     const tps   = subtotal * 0.05;
     const tvq   = subtotal * 0.09975;
