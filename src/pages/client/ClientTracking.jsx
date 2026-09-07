@@ -92,7 +92,7 @@ export default function ClientTracking() {
         paddingTop:'max(16px, env(safe-area-inset-top))',
         paddingBottom:'12px',
       }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => navigate('/portal')}
           className="flex items-center gap-1 text-sm flex-shrink-0"
           style={{color:'rgba(250,247,240,0.5)', minWidth:'44px', minHeight:'44px'}}>
           ← Back
