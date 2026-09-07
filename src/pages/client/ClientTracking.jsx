@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export default function ClientTracking() {
   const { orderId } = useParams();
@@ -16,15 +14,23 @@ export default function ClientTracking() {
   const [order,     setOrder]     = useState(null);
 
   useEffect(() => {
-    const map = new mapboxgl.Map({
-      container: mapRef.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-73.5673, 45.5017],
-      zoom: 12,
-    });
-    mapInstance.current = map;
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    return () => map.remove();
+    let map;
+    const initMap = async () => {
+      const mapboxgl = (await import('mapbox-gl')).default;
+      await import('mapbox-gl/dist/mapbox-gl.css');
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+
+      map = new mapboxgl.Map({
+        container: mapRef.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-73.5673, 45.5017],
+        zoom: 12,
+      });
+      mapInstance.current = map;
+      map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    };
+    initMap();
+    return () => { if (map) map.remove(); };
   }, []);
 
   useEffect(() => {
@@ -44,6 +50,7 @@ export default function ClientTracking() {
             if (markerRef.current) {
               markerRef.current.setLngLat([lng, lat]);
             } else {
+              const mapboxgl = (await import('mapbox-gl')).default;
               const el = document.createElement('div');
               el.innerHTML = '🚚';
               el.style.fontSize = '28px';
