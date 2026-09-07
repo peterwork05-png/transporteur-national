@@ -32,6 +32,39 @@ export default function ClientPortal() {
   const [loading,  setLoading]  = useState(false);
   const [selected, setSelected] = useState(null);
 
+  // Change password
+  const [showChangePwd,  setShowChangePwd]  = useState(false);
+  const [newPassword,    setNewPassword]    = useState('');
+  const [confirmPassword,setConfirmPassword]= useState('');
+  const [pwdError,       setPwdError]       = useState('');
+  const [pwdSuccess,     setPwdSuccess]     = useState(false);
+  const [savingPwd,      setSavingPwd]      = useState(false);
+
+  const handleChangePassword = async () => {
+    setPwdError('');
+    if (newPassword.length < 6) return setPwdError('Password must be at least 6 characters');
+    if (newPassword !== confirmPassword) return setPwdError('Passwords do not match');
+    setSavingPwd(true);
+    try {
+      const res  = await fetch('/api/auth/client-change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: client.email, newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPwdSuccess(true);
+        if (remember) {
+          localStorage.setItem(REMEMBER_KEY, JSON.stringify({ email: client.email, password: newPassword }));
+        }
+        setTimeout(() => { setShowChangePwd(false); setPwdSuccess(false); setNewPassword(''); setConfirmPassword(''); }, 2000);
+      } else {
+        setPwdError(data.error || 'Error changing password');
+      }
+    } catch(e) { setPwdError('Connection error'); }
+    setSavingPwd(false);
+  };
+
   // Load remembered credentials on mount
   useEffect(() => {
     try {
@@ -56,7 +89,7 @@ export default function ClientPortal() {
     setAuthLoad(true);
     setAuthError('');
     try {
-      const res = await fetch('/api/auth/client-login', {
+      const res  = await fetch('/api/clients/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -95,20 +128,7 @@ export default function ClientPortal() {
     if (!client) return;
     setLoading(true);
     try {
-      const now   = new Date();
-      const year  = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
-
-      let url = `/api/orders?client_group=${client.client_group || client.id}`;
-      if (period === 'today') {
-        const today = now.toISOString().split('T')[0];
-        url += `&date_from=${today}&date_to=${today}`;
-      } else if (period === 'month') {
-        url += `&date_from=${year}-${month}-01&date_to=${year}-${month}-${lastDay}`;
-      } else if (period === 'all') {
-        url += `&all=true`;
-      }
+      const url = `/api/client/orders?client_group=${client.client_group || client.id}&period=${period}`;
       const res  = await fetch(url);
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
@@ -119,7 +139,7 @@ export default function ClientPortal() {
   const fetchInvoices = useCallback(async () => {
     if (!client || client.role !== 'finance') return;
     try {
-      const res  = await fetch(`/api/invoices?client_group=${client.client_group || client.id}`);
+      const res  = await fetch(`/api/client/invoices?client_group=${client.client_group || client.id}`);
       const data = await res.json();
       setInvoices(Array.isArray(data) ? data : []);
     } catch(err) { console.error(err); }
@@ -209,6 +229,10 @@ export default function ClientPortal() {
           <button onClick={handleLogout} className="btn btn-sm"
             style={{background:'rgba(250,247,240,0.08)',color:'rgba(250,247,240,0.5)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
             Sign out
+          </button>
+          <button onClick={() => setShowChangePwd(true)} className="btn btn-sm"
+            style={{background:'rgba(250,247,240,0.08)',color:'rgba(250,247,240,0.5)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
+            🔑
           </button>
         </div>
       </div>
@@ -402,6 +426,52 @@ export default function ClientPortal() {
                 className="btn w-full justify-center" style={{background:'var(--tn-red)',color:'white'}}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change password modal */}
+      {showChangePwd && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{background:'rgba(26,18,8,0.6)'}}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" style={{background:'var(--tn-cream)'}}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{background:'var(--tn-dark)',borderRadius:'16px 16px 0 0'}}>
+              <p className="font-semibold" style={{color:'var(--tn-cream)'}}>🔑 Change password</p>
+              <button onClick={() => { setShowChangePwd(false); setNewPassword(''); setConfirmPassword(''); setPwdError(''); }}
+                className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+            </div>
+            <div className="p-5 space-y-3">
+              {pwdSuccess ? (
+                <div className="text-center py-4">
+                  <p className="text-3xl mb-2">✅</p>
+                  <p className="font-semibold">Password changed successfully!</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="label">New password</label>
+                    <input type="password" className="input" placeholder="At least 6 characters"
+                      value={newPassword} onChange={e=>setNewPassword(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">Confirm new password</label>
+                    <input type="password" className="input" placeholder="Repeat new password"
+                      value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} />
+                  </div>
+                  {pwdError && (
+                    <p className="text-xs px-3 py-2 rounded-lg" style={{background:'#FEE2E2',color:'#991B1B'}}>{pwdError}</p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setShowChangePwd(false); setNewPassword(''); setConfirmPassword(''); setPwdError(''); }}
+                      className="btn btn-outline flex-1 justify-center">Cancel</button>
+                    <button onClick={handleChangePassword} disabled={savingPwd || !newPassword || !confirmPassword}
+                      className="btn flex-1 justify-center"
+                      style={{background:'var(--tn-red)',color:'white',opacity:savingPwd||!newPassword||!confirmPassword?0.5:1}}>
+                      {savingPwd ? '⏳ Saving...' : 'Save password'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
