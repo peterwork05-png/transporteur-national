@@ -178,7 +178,8 @@ router.get('/orders/:id', async (req, res) => {
 // Update order status
 router.patch('/orders/:id/status', async (req, res) => {
   try {
-    const { status, picked_up_at, on_way_at, delivered_at, recipient_name, photo_url, signature_url } = req.body;
+    const { status, picked_up_at, on_way_at, delivered_at, recipient_name, photo_url, signature_url, notes } = req.body;
+    const str20 = (val) => val ? String(val).substring(0, 20) : null;
     const { rows } = await pool.query(`
       UPDATE orders SET
         status = COALESCE($1, status),
@@ -188,10 +189,11 @@ router.patch('/orders/:id/status', async (req, res) => {
         recipient_name = COALESCE($5, recipient_name),
         photo_url = COALESCE($6, photo_url),
         signature_url = COALESCE($7, signature_url),
+        notes = COALESCE($8, notes),
         updated_at = NOW()
-      WHERE id = $8
+      WHERE id = $9
       RETURNING *
-    `, [status, picked_up_at, on_way_at, delivered_at, recipient_name, photo_url, signature_url, req.params.id]);
+    `, [status, str20(picked_up_at), str20(on_way_at), str20(delivered_at), recipient_name, photo_url, signature_url, notes || null, req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
     res.json(rows[0]);
   } catch (err) {
