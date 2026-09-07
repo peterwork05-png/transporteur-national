@@ -1,247 +1,112 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
-const STATUS_INFO = {
-  waiting:   { label:'Order placed',  color:'#8B6914', icon:'📦' },
-  picked:    { label:'Picked up',     color:'#B45309', icon:'🏭' },
-  enroute:   { label:'On the way',    color:'#185FA5', icon:'🚚' },
-  delivered: { label:'Delivered',     color:'#0F6E56', icon:'✅' },
-};
-
-const TOKEN = 'pk.eyJ1IjoidHJhbnNwb3J0ZXVybmF0aW9uYWxtYyIsImEiOiJjbXJ3YzIzaTcwNHFyMnlvZDRqZ3N4ZmZ3In0.IKDUZdNanbw4y7N_oEEh6Q';
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export default function ClientTracking() {
   const { orderId } = useParams();
-  const mapRef = useRef(null);
-  const mapObj = useRef(null);
-
-  const [order,    setOrder]    = useState(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
-  const [coords,   setCoords]   = useState(null);
-  const [driverPos,setDriverPos]= useState(null);
+  const navigate    = useNavigate();
+  const mapRef      = useRef(null);
+  const mapInstance = useRef(null);
+  const markerRef   = useRef(null);
+  const [status,    setStatus]    = useState('Loading...');
+  const [lastSeen,  setLastSeen]  = useState(null);
+  const [order,     setOrder]     = useState(null);
 
   useEffect(() => {
-    fetch('/api/orders/' + orderId)
-      .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
-      .then(data => { setOrder(data); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
+    const map = new mapboxgl.Map({
+      container: mapRef.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [-73.5673, 45.5017],
+      zoom: 12,
+    });
+    mapInstance.current = map;
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    return () => map.remove();
+  }, []);
+
+  useEffect(() => {
+    const fetchLocation = async () => {
+      try {
+        const res  = await fetch(`/api/orders/${orderId}/track`);
+        const data = await res.json();
+        if (data.order) setOrder(data.order);
+
+        if (data.location) {
+          const { lat, lng, updated_at } = data.location;
+          setStatus('Driver is on the way');
+          setLastSeen(updated_at ? new Date(updated_at).toLocaleTimeString() : null);
+
+          if (mapInstance.current) {
+            mapInstance.current.flyTo({ center: [lng, lat], zoom: 14 });
+            if (markerRef.current) {
+              markerRef.current.setLngLat([lng, lat]);
+            } else {
+              const el = document.createElement('div');
+              el.innerHTML = '🚚';
+              el.style.fontSize = '28px';
+              el.style.cursor = 'pointer';
+              markerRef.current = new mapboxgl.Marker({ element: el })
+                .setLngLat([lng, lat])
+                .addTo(mapInstance.current);
+            }
+          }
+        } else {
+          setStatus(data.order?.status === 'delivered' ? 'Delivered ✅' : 'Waiting for driver location...');
+        }
+      } catch(err) { setStatus('Unable to load location'); }
+    };
+
+    fetchLocation();
+    const interval = setInterval(fetchLocation, 15000);
+    return () => clearInterval(interval);
   }, [orderId]);
 
-  useEffect(() => {
-    if (!order?.address) return;
-    const q = encodeURIComponent(order.address + ', Quebec, Canada');
-    fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?access_token=' + TOKEN + '&country=CA&limit=1')
-      .then(r => r.json())
-      .then(data => {
-        if (data.features && data.features[0]) {
-          const [lng, lat] = data.features[0].center;
-          setCoords({ lat, lng });
-        }
-      })
-      .catch(() => {});
-  }, [order]);
-
-  useEffect(() => {
-    if (!order?.driver_id || order.status !== 'enroute') return;
-    const poll = () => {
-      fetch('/api/drivers/' + order.driver_id + '/location')
-        .then(r => r.json())
-        .then(d => { if (d.lat && d.lng) setDriverPos({ lat: d.lat, lng: d.lng }); })
-        .catch(() => {});
-    };
-    poll();
-    const iv = setInterval(poll, 15000);
-    return () => clearInterval(iv);
-  }, [order]);
-
-  // Init map - center between driver and delivery if both available
-  useEffect(() => {
-    if (mapObj.current || !mapRef.current || !coords) return;
-
-    if (!document.querySelector('link[href*="mapbox-gl"]')) {
-      const link = document.createElement('link');
-      link.rel  = 'stylesheet';
-      link.href = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css';
-      document.head.appendChild(link);
-    }
-
-    const initMap = () => {
-      if (!window.mapboxgl || !mapRef.current) return;
-      window.mapboxgl.accessToken = TOKEN;
-      const map = new window.mapboxgl.Map({
-        container: mapRef.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [coords.lng, coords.lat],
-        zoom: 13,
-      });
-      map.addControl(new window.mapboxgl.NavigationControl());
-
-      // Delivery pin
-      const el = document.createElement('div');
-      el.style.cssText = 'font-size:36px;line-height:1';
-      el.textContent = '📍';
-      new window.mapboxgl.Marker({ element: el })
-        .setLngLat([coords.lng, coords.lat])
-        .setPopup(new window.mapboxgl.Popup({ offset:25 }).setHTML(
-          `<div style="font-family:sans-serif;padding:4px">
-            <p style="font-weight:700;margin:0;font-size:13px">${order?.to_business_name||order?.client_name||'Delivery'}</p>
-            <p style="color:#666;font-size:11px;margin:3px 0 0">${order?.address}</p>
-          </div>`
-        ))
-        .addTo(map);
-
-      mapObj.current = map;
-
-      // If driver location already known, fit bounds to show both
-      if (driverPos) {
-        const bounds = new window.mapboxgl.LngLatBounds();
-        bounds.extend([coords.lng, coords.lat]);
-        bounds.extend([driverPos.lng, driverPos.lat]);
-        map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
-      }
-    };
-
-    if (window.mapboxgl) { initMap(); }
-    else {
-      const script = document.createElement('script');
-      script.src = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js';
-      script.onload = initMap;
-      document.head.appendChild(script);
-    }
-  }, [coords]);
-
-  // Update driver marker and fit both on screen
-  useEffect(() => {
-    if (!mapObj.current || !driverPos || !window.mapboxgl) return;
-    const el = document.createElement('div');
-    el.style.cssText = 'font-size:30px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
-    el.textContent = '🚚';
-    new window.mapboxgl.Marker({ element: el })
-      .setLngLat([driverPos.lng, driverPos.lat])
-      .setPopup(new window.mapboxgl.Popup({ offset:25 }).setHTML(
-        `<div style="font-family:sans-serif;padding:4px">
-          <p style="font-weight:700;margin:0">${order?.driver_name||'Driver'}</p>
-          <p style="color:#185FA5;font-size:11px;margin:3px 0 0">🚚 En route to you</p>
-        </div>`
-      ))
-      .addTo(mapObj.current);
-
-    // Fit map to show both driver and delivery
-    if (coords) {
-      const bounds = new window.mapboxgl.LngLatBounds();
-      bounds.extend([driverPos.lng, driverPos.lat]);
-      bounds.extend([coords.lng, coords.lat]);
-      mapObj.current.fitBounds(bounds, { padding: 80, maxZoom: 14, duration: 1000 });
-    }
-  }, [driverPos]);
-
-  if (loading) return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#1A1208'}}>
-      <div style={{textAlign:'center'}}><div style={{fontSize:'48px',marginBottom:'12px'}}>🗺️</div><p style={{color:'#FAF7F0'}}>Loading...</p></div>
-    </div>
-  );
-
-  if (error) return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#1A1208'}}>
-      <div style={{textAlign:'center'}}><div style={{fontSize:'48px',marginBottom:'12px'}}>❌</div><p style={{color:'#FAF7F0'}}>Order not found</p></div>
-    </div>
-  );
-
-  const info  = STATUS_INFO[order?.status] || STATUS_INFO.waiting;
-  const steps = ['waiting','picked','enroute','delivered'];
-  const rank  = steps.indexOf(order?.status);
-
   return (
-    <div style={{minHeight:'100vh',background:'#FAF7F0',fontFamily:'sans-serif'}}>
-      <div style={{background:'#1A1208',padding:'14px 20px',borderBottom:'1px solid rgba(139,105,20,0.2)'}}>
-        <div style={{maxWidth:'640px',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-            <span style={{fontSize:'24px'}}>{info.icon}</span>
-            <div>
-              <p style={{fontFamily:'monospace',fontSize:'11px',color:'rgba(250,247,240,0.4)',margin:0}}>{order?.id}</p>
-              <p style={{fontSize:'15px',fontWeight:'600',color:'#FAF7F0',margin:0}}>{info.label}</p>
-            </div>
-          </div>
-          {order?.status==='enroute' && (
-            <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-              <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#4ADE80'}}/>
-              <span style={{fontSize:'11px',color:'rgba(250,247,240,0.6)'}}>Live</span>
-            </div>
+    <div className="min-h-screen flex flex-col" style={{background:'var(--tn-dark)'}}>
+      {/* Header with safe area */}
+      <div className="px-4 flex items-center gap-3 z-10" style={{
+        background:'var(--tn-dark)',
+        borderBottom:'0.5px solid rgba(139,105,20,0.2)',
+        paddingTop:'max(16px, env(safe-area-inset-top))',
+        paddingBottom:'12px',
+      }}>
+        <button onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-sm flex-shrink-0"
+          style={{color:'rgba(250,247,240,0.5)', minWidth:'44px', minHeight:'44px'}}>
+          ← Back
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold truncate" style={{color:'var(--tn-cream)'}}>
+            🗺️ Live Tracking
+          </p>
+          {order && (
+            <p className="text-xs truncate" style={{color:'rgba(250,247,240,0.4)'}}>
+              {order.id} · {order.address}
+            </p>
           )}
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <p className="text-xs font-medium" style={{color:'var(--tn-gold)'}}>{status}</p>
+          {lastSeen && <p className="text-xs" style={{color:'rgba(250,247,240,0.3)'}}>Updated {lastSeen}</p>}
         </div>
       </div>
 
       {/* Map */}
-      <div style={{width:'100%',height:'380px',background:'#d4e4d4',position:'relative'}}>
-        <div ref={mapRef} style={{width:'100%',height:'100%'}} />
-        {!coords && (
-          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'#d4e4d4'}}>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontSize:'40px'}}>🗺️</div>
-              <p style={{color:'#666',fontSize:'13px',marginTop:'8px'}}>Loading map...</p>
-            </div>
-          </div>
-        )}
-      </div>
+      <div ref={mapRef} className="flex-1" style={{minHeight:'calc(100vh - 80px)'}} />
 
-      <div style={{padding:'20px',maxWidth:'640px',margin:'0 auto'}}>
-        <div style={{display:'flex',alignItems:'center',marginBottom:'20px'}}>
-          {steps.map((step,i) => {
-            const done   = i <= rank;
-            const labels = ['Placed','Picked up','En route','Delivered'];
-            return (
-              <div key={step} style={{display:'flex',alignItems:'center',flex:i<3?1:'none'}}>
-                <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                  <div style={{width:'26px',height:'26px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:'bold',background:done?info.color:'#F0EBE0',color:done?'white':'#8B6914'}}>
-                    {done?'✓':i+1}
-                  </div>
-                  <p style={{fontSize:'9px',margin:'4px 0 0',color:done?'#1A1208':'rgba(26,18,8,0.3)',textAlign:'center',whiteSpace:'nowrap'}}>{labels[i]}</p>
-                </div>
-                {i<3&&<div style={{flex:1,height:'2px',margin:'0 4px 16px',background:i<rank?info.color:'#F0EBE0'}}/>}
-              </div>
-            );
-          })}
+      {/* Bottom info */}
+      <div className="px-4 py-3" style={{
+        background:'var(--tn-dark)',
+        borderTop:'0.5px solid rgba(139,105,20,0.2)',
+        paddingBottom:'max(12px, env(safe-area-inset-bottom))',
+      }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full animate-pulse" style={{background:'#4ADE80'}}/>
+          <p className="text-xs" style={{color:'rgba(250,247,240,0.4)'}}>Updates every 15 seconds</p>
         </div>
-
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
-          <div style={{borderRadius:'12px',padding:'12px',background:'#F0EBE0',gridColumn:'1/-1'}}>
-            <p style={{fontSize:'11px',color:'#8B6914',margin:'0 0 3px'}}>Delivery address</p>
-            <p style={{fontSize:'13px',fontWeight:'500',margin:0}}>{order?.address}</p>
-          </div>
-          <div style={{borderRadius:'12px',padding:'12px',background:'#F0EBE0'}}>
-            <p style={{fontSize:'11px',color:'#8B6914',margin:'0 0 3px'}}>Driver</p>
-            <p style={{fontSize:'13px',fontWeight:'500',margin:0}}>{order?.driver_name||'—'}</p>
-          </div>
-          {order?.boxes && (
-            <div style={{borderRadius:'12px',padding:'12px',background:'#F0EBE0'}}>
-              <p style={{fontSize:'11px',color:'#8B6914',margin:'0 0 3px'}}>Boxes</p>
-              <p style={{fontSize:'13px',fontWeight:'500',margin:0}}>{order.boxes} box{order.boxes>1?'es':''}</p>
-            </div>
-          )}
-          {order?.requested_delivery_time && (
-            <div style={{borderRadius:'12px',padding:'12px',background:'#F0EBE0'}}>
-              <p style={{fontSize:'11px',color:'#8B6914',margin:'0 0 3px'}}>Deliver by</p>
-              <p style={{fontSize:'13px',fontWeight:'500',margin:0}}>🕐 {order.requested_delivery_time}</p>
-            </div>
-          )}
-        </div>
-
-        {order?.status==='delivered' && (
-          <div style={{marginTop:'14px',borderRadius:'12px',padding:'14px',background:'#E8F5EF',display:'flex',alignItems:'center',gap:'10px'}}>
-            <span style={{fontSize:'20px'}}>✅</span>
-            <div>
-              <p style={{fontSize:'14px',fontWeight:'600',color:'#0F6E56',margin:0}}>Delivered successfully</p>
-              {order.delivered_at&&<p style={{fontSize:'12px',color:'#0F6E56',margin:'3px 0 0'}}>at {order.delivered_at}</p>}
-            </div>
-          </div>
-        )}
-
-        {order?.status==='enroute'&&!driverPos&&(
-          <div style={{marginTop:'14px',borderRadius:'12px',padding:'12px',background:'#EFF6FF'}}>
-            <p style={{fontSize:'12px',textAlign:'center',color:'#185FA5',margin:0}}>🚚 On the way — map updates every 15 seconds</p>
-          </div>
-        )}
       </div>
     </div>
   );
