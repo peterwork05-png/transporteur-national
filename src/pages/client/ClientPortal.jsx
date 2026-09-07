@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const STATUS_BADGE = {
-  waiting:   { label:'Processing',  cls:'badge-gray' },
-  picked:    { label:'Picked up',   cls:'badge-warning' },
-  enroute:   { label:'En route',    cls:'badge-info' },
-  delivered: { label:'Delivered',   cls:'badge-success' },
-  attempted: { label:'Attempted delivery', cls:'badge-danger' },
+  waiting:   { label:'Processing',       cls:'badge-gray' },
+accepted:  { label:'Accepted',         cls:'badge-info' },
+picked:    { label:'Picked up',        cls:'badge-warning' },
+enroute:   { label:'En route',         cls:'badge-info' },
+delivered: { label:'Delivered',        cls:'badge-success' },
+attempted: { label:'Attempted delivery', cls:'badge-danger' },
 };
 
 const PERIODS = [
