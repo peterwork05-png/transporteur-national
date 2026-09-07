@@ -1012,7 +1012,7 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
 // Edit order fields
 router.patch('/orders/:id/edit', async (req, res) => {
   try {
-    const { address, boxes, amount, date, driver_id } = req.body;
+    const { address, boxes, amount, date, driver_id, status, notes } = req.body;
     const { rows } = await pool.query(`
       UPDATE orders SET
         address   = COALESCE($1, address),
@@ -1020,9 +1020,11 @@ router.patch('/orders/:id/edit', async (req, res) => {
         amount    = COALESCE($3, amount),
         date      = COALESCE($4, date),
         driver_id = $5,
+        status    = COALESCE($6, status),
+        notes     = COALESCE($7, notes),
         updated_at = NOW()
-      WHERE id = $6 RETURNING *
-    `, [address, boxes, amount, date, driver_id || null, req.params.id]);
+      WHERE id = $8 RETURNING *
+    `, [address, boxes, amount, date, driver_id || null, status || null, notes || null, req.params.id]);
     res.json(rows[0]);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
