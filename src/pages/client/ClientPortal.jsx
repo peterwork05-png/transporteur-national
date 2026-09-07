@@ -31,6 +31,7 @@ export default function ClientPortal() {
   const [period,   setPeriod]   = useState('month');
   const [loading,  setLoading]  = useState(false);
   const [selected, setSelected] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   // Change password
   const [showChangePwd,  setShowChangePwd]  = useState(false);
@@ -351,12 +352,15 @@ export default function ClientPortal() {
                 <p className="font-medium">No invoices found</p>
               </div>
             ) : invoices.map(inv => (
-              <div key={inv.id} className="card p-4">
+              <div key={inv.id} className="card p-4 cursor-pointer" onClick={() => setSelectedInvoice(inv)}>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <p className="font-mono text-sm font-bold" style={{color:'var(--tn-red)'}}>#{inv.id}</p>
                     <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>
                       {String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>
+                      {inv.type === 'contract' ? `Contract · ${inv.route}` : 'Local deliveries'}
                     </p>
                   </div>
                   <span className={`badge ${inv.status==='paid'?'badge-success':inv.status==='overdue'?'badge-danger':'badge-warning'}`}>
@@ -364,13 +368,8 @@ export default function ClientPortal() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
-                  <p className="font-semibold text-sm">{fmt(inv.amount || inv.total)}</p>
-                  {inv.pdf_url && (
-                    <a href={inv.pdf_url} target="_blank" rel="noreferrer"
-                      className="btn btn-sm text-xs" style={{background:'var(--tn-red)',color:'white'}}>
-                      ⬇ Download PDF
-                    </a>
-                  )}
+                  <p className="font-semibold text-sm">{fmt(inv.total || inv.amount)}</p>
+                  <p className="text-xs" style={{color:'var(--tn-gold)'}}>Tap for details →</p>
                 </div>
               </div>
             ))}
@@ -499,6 +498,93 @@ export default function ClientPortal() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice detail modal */}
+      {selectedInvoice && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{background:'rgba(26,18,8,0.6)'}} onClick={() => setSelectedInvoice(null)}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto"
+            style={{background:'var(--tn-cream)'}} onClick={e=>e.stopPropagation()}>
+            <div className="px-6 flex items-center justify-between sticky top-0"
+              style={{background:'var(--tn-dark)', paddingTop:'max(16px, env(safe-area-inset-top))', paddingBottom:'16px'}}>
+              <div>
+                <p className="font-mono text-xs" style={{color:'rgba(250,247,240,0.4)'}}>Invoice #{selectedInvoice.id}</p>
+                <p className="font-semibold" style={{color:'var(--tn-cream)'}}>Invoice details</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`badge ${selectedInvoice.status==='paid'?'badge-success':selectedInvoice.status==='overdue'?'badge-danger':'badge-warning'}`}>
+                  {selectedInvoice.status?.charAt(0).toUpperCase()+selectedInvoice.status?.slice(1)}
+                </span>
+                <button onClick={() => setSelectedInvoice(null)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Invoice info */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label:'Invoice #',  val: `#${selectedInvoice.id}` },
+                  { label:'Type',       val: selectedInvoice.type === 'contract' ? `Contract · ${selectedInvoice.route}` : 'Local deliveries' },
+                  { label:'Period',     val: `${String(selectedInvoice.date_from||'').split('T')[0]} – ${String(selectedInvoice.date_to||'').split('T')[0]}` },
+                  selectedInvoice.type === 'contract' && selectedInvoice.days ? { label:'Days', val: `${selectedInvoice.days} days` } : null,
+                ].filter(Boolean).map((item, i) => (
+                  <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)'}}>
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
+                    <p className="font-semibold text-sm mt-0.5">{item.val}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Amount breakdown */}
+              <div className="rounded-xl p-4" style={{background:'var(--tn-warm)'}}>
+                <p className="text-xs font-medium mb-3" style={{color:'var(--tn-gold)'}}>Amount breakdown</p>
+                {(() => {
+                  const TPS = 0.05;
+                  const TVQ = 0.09975;
+                  const sub   = selectedInvoice.subtotal ? parseFloat(selectedInvoice.subtotal) : parseFloat(selectedInvoice.total || selectedInvoice.amount || 0) / (1 + TPS + TVQ);
+                  const tps   = selectedInvoice.tps ? parseFloat(selectedInvoice.tps) : sub * TPS;
+                  const tvq   = selectedInvoice.tvq ? parseFloat(selectedInvoice.tvq) : sub * TVQ;
+                  const total = sub + tps + tvq;
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span>{fmt(sub)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TPS (5%)</span><span>{fmt(tps)}</span></div>
+                      <div className="flex justify-between text-sm"><span style={{color:'var(--tn-gold)'}}>TVQ (9.975%)</span><span>{fmt(tvq)}</span></div>
+                      <div className="flex justify-between font-bold pt-2 text-sm" style={{borderTop:'0.5px solid var(--tn-border)'}}>
+                        <span>Total</span><span style={{color:'var(--tn-red)'}}>{fmt(total)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* EFT reference if paid */}
+              {selectedInvoice.eft_number && (
+                <div className="rounded-xl p-3 flex items-center gap-2" style={{background:'#E8F5EF'}}>
+                  <span>💳</span>
+                  <div>
+                    <p className="text-xs font-medium" style={{color:'#0F6E56'}}>Payment received</p>
+                    <p className="text-sm font-semibold" style={{color:'#0F6E56'}}>EFT #{selectedInvoice.eft_number}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                {selectedInvoice.pdf_url && (
+                  <a href={selectedInvoice.pdf_url} target="_blank" rel="noreferrer"
+                    className="btn flex-1 justify-center" style={{background:'#0F6E56',color:'white'}}>
+                    ⬇ Download PDF
+                  </a>
+                )}
+                <button onClick={() => setSelectedInvoice(null)}
+                  className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
