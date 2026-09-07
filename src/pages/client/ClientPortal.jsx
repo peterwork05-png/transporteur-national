@@ -75,8 +75,18 @@ export default function ClientPortal() {
           setEmail(e);
           setPassword(p);
           setRemember(true);
-          // Auto login
-          handleLogin(e, p);
+          // Auto login inline to avoid dependency issues
+          setTimeout(async () => {
+            try {
+              const res = await fetch('/api/auth/client-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: e, password: p }),
+              });
+              const data = await res.json();
+              if (data.success) { setClient(data.client); setLoggedIn(true); }
+            } catch(err) {}
+          }, 300);
         }
       }
     } catch(err) {}
@@ -89,7 +99,7 @@ export default function ClientPortal() {
     setAuthLoad(true);
     setAuthError('');
     try {
-      const res  = await fetch('/api/clients/login', {
+      const res  = await fetch('/api/auth/client-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
