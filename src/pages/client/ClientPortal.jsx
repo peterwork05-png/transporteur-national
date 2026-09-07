@@ -67,6 +67,18 @@ export default function ClientPortal() {
 
   // Load remembered credentials on mount
   useEffect(() => {
+    // First check sessionStorage for active session
+    try {
+      const session = sessionStorage.getItem('tn_client_session');
+      if (session) {
+        const clientData = JSON.parse(session);
+        setClient(clientData);
+        setLoggedIn(true);
+        return;
+      }
+    } catch(err) {}
+
+    // Then check localStorage for remembered credentials
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
       if (saved) {
@@ -75,7 +87,6 @@ export default function ClientPortal() {
           setEmail(e);
           setPassword(p);
           setRemember(true);
-          // Auto login inline to avoid dependency issues
           setTimeout(async () => {
             try {
               const res = await fetch('/api/auth/client-login', {
@@ -84,7 +95,11 @@ export default function ClientPortal() {
                 body: JSON.stringify({ email: e, password: p }),
               });
               const data = await res.json();
-              if (data.success) { setClient(data.client); setLoggedIn(true); }
+              if (data.success) {
+                setClient(data.client);
+                setLoggedIn(true);
+                sessionStorage.setItem('tn_client_session', JSON.stringify(data.client));
+              }
             } catch(err) {}
           }, 300);
         }
@@ -108,6 +123,7 @@ export default function ClientPortal() {
       if (data.success) {
         setClient(data.client);
         setLoggedIn(true);
+        sessionStorage.setItem('tn_client_session', JSON.stringify(data.client));
         if (remember || p) {
           localStorage.setItem(REMEMBER_KEY, JSON.stringify({ email: loginEmail, password: loginPassword }));
         } else {
@@ -127,6 +143,7 @@ export default function ClientPortal() {
     setClient(null);
     setOrders([]);
     setInvoices([]);
+    sessionStorage.removeItem('tn_client_session');
     if (!remember) {
       localStorage.removeItem(REMEMBER_KEY);
       setEmail('');
@@ -242,7 +259,7 @@ export default function ClientPortal() {
           </button>
           <button onClick={() => setShowChangePwd(true)} className="btn btn-sm"
             style={{background:'rgba(250,247,240,0.08)',color:'rgba(250,247,240,0.5)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
-            🔑
+            🔑 Change password
           </button>
         </div>
       </div>
