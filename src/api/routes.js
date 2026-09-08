@@ -883,7 +883,7 @@ router.post('/setup/add-elaine', async (req, res) => {
 router.get('/invoices/:id/preview', async (req, res) => {
   try {
     const { rows: invRows } = await pool.query(
-      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
+      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group, c.name as client_name FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
       [req.params.id]
     );
     if (invRows.length === 0) return res.status(404).send('Invoice not found');
@@ -935,7 +935,7 @@ router.get('/invoices/:id/preview', async (req, res) => {
 router.post('/invoices/:id/generate-pdf', async (req, res) => {
   try {
     const { rows: invRows } = await pool.query(
-      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
+      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group, c.name as client_name FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
       [req.params.id]
     );
     if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
