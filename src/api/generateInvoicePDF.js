@@ -11,7 +11,7 @@ const ROUTE_LABELS = {
 };
 
 export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
-  const client     = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: (clientGroup||'').toUpperCase(), address: '' };
+  const client = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
   const dateFrom   = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
   const dateTo     = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
   const fmt        = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
