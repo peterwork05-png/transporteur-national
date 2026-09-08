@@ -1571,6 +1571,14 @@ async function recalcContractInvoice(invoiceId) {
     [subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2), invoiceId]
   );
 }
+// Set/change client on invoice
+router.patch('/invoices/:id/set-client', async (req, res) => {
+  try {
+    const { client_id } = req.body;
+    await pool.query(`UPDATE invoices SET client_id = $1 WHERE id = $2`, [client_id || null, req.params.id]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
