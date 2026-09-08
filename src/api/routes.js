@@ -1579,6 +1579,12 @@ router.patch('/invoices/:id/set-client', async (req, res) => {
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+router.delete('/invoices/:id/delete-pdf', async (req, res) => {
+  try {
+    await pool.query(`UPDATE invoices SET pdf_url = NULL WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
