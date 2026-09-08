@@ -573,6 +573,15 @@ export default function AdminInvoices() {
                       <button onClick={handleGeneratePDF} disabled={uploading} className="btn btn-outline btn-sm flex-1 justify-center text-xs" style={{opacity:uploading?0.6:1}}>{uploading?'⏳...':'🔄 Regenerate PDF'}</button>
                       <button onClick={handlePreview} className="btn btn-outline btn-sm flex-1 justify-center text-xs">👁 Preview</button>
                     </div>
+                    <div className="flex gap-2">
+                      <button onClick={()=>fileRef.current?.click()} className="btn btn-outline btn-sm flex-1 justify-center text-xs">📤 Replace PDF</button>
+                      <button onClick={async()=>{
+                        if(!window.confirm('Delete this PDF?'))return;
+                        await fetch(`/api/invoices/${selected.id}/delete-pdf`,{method:'DELETE'});
+                        await fetchInvoices();
+                        setSelected(prev=>({...prev,pdf_url:null}));
+                      }} className="btn btn-sm flex-shrink-0 px-3" style={{background:'#FEE2E2',color:'#991B1B'}}>🗑 Delete PDF</button>
+                    </div>
                   </div>
                 ):(
                   <div className="space-y-2">
