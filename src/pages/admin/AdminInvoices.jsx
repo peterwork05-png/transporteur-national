@@ -75,13 +75,24 @@ export default function AdminInvoices() {
     });
 
   const fetchAllClients = async () => {
-    try {
-      const res = await fetch('/api/clients/portal');
-      const data = await res.json();
-      const seen = new Set();
-      setAllClients((Array.isArray(data)?data:[]).filter(c => { const k=c.client_group||c.id; if(seen.has(k))return false; seen.add(k); return true; }));
-    } catch(e) { console.error(e); }
-  };
+  try {
+    const res = await fetch('/api/clients/portal');
+    const data = await res.json();
+    const sorted = (Array.isArray(data) ? data : []).sort((a, b) => {
+      if (a.role === 'ops' && b.role !== 'ops') return -1;
+      if (a.role !== 'ops' && b.role === 'ops') return 1;
+      return a.id.localeCompare(b.id);
+    });
+    const seen = new Set();
+    const unique = sorted.filter(c => {
+      const key = c.client_group || c.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    setAllClients(unique);
+  } catch(e) { console.error(e); }
+};
 
   const handleChangeClient = async (clientId) => {
     setSavingClient(true);
@@ -405,7 +416,7 @@ export default function AdminInvoices() {
                   </div>
                   <select className="input" onChange={e=>handleChangeClient(e.target.value)} disabled={savingClient} defaultValue="">
                     <option value="">— No client (manual invoice) —</option>
-                    {allClients.map(c=>(<option key={c.id} value={c.client_group||c.id}>{c.name}</option>))}
+                    {allClients.map(c=>(<option key={c.id} value={c.id}>{c.name}</option>))}
                   </select>
                   {savingClient&&<p className="text-xs mt-1" style={{color:'#185FA5'}}>⏳ Saving...</p>}
                 </div>
