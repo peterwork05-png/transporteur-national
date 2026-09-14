@@ -1,48 +1,66 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 
-const DRIVER_PATHS = {
-  local:   (id) => `/driver/local/${id}`,
-  ontario: ()   => '/driver/ontario',
-  quebec:  ()   => '/driver/quebec',
-};
+const KeyButton = memo(({ digit, onDigit, onDelete, loading }) => {
+  const handleClick = useCallback(() => {
+    if (digit === '⌫') onDelete();
+    else if (digit) onDigit(digit);
+  }, [digit, onDigit, onDelete]);
+
+  return (
+    <button onClick={handleClick} disabled={!digit || loading}
+      className="h-14 rounded-2xl text-xl font-medium transition-all active:scale-95"
+      style={{
+        background: digit ? 'rgba(250,247,240,0.07)' : 'transparent',
+        color:      digit ? 'var(--tn-cream)' : 'transparent',
+        border:     digit ? '0.5px solid rgba(139,105,20,0.2)' : 'none',
+        opacity:    loading ? 0.5 : 1,
+      }}>
+      {digit}
+    </button>
+  );
+});
 
 function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
-  const [pin,     setPin]     = useState('');
+  const pinRef    = useRef('');
+  const [dots,    setDots]    = useState(0);
   const [error,   setError]   = useState('');
   const [shake,   setShake]   = useState(false);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
   const submitPin = useCallback(async (p) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     const result = await onPinComplete(p);
+    loadingRef.current = false;
     setLoading(false);
     if (result.success) {
       onSuccess(result);
     } else {
       setShake(true);
       setError('Incorrect PIN');
-      setTimeout(() => { setPin(''); setShake(false); setError(''); }, 700);
+      setTimeout(() => { pinRef.current = ''; setDots(0); setShake(false); setError(''); }, 700);
     }
   }, [onPinComplete, onSuccess]);
 
   const handleDigit = useCallback((d) => {
-    if (loading) return;
-    setPin(prev => {
-      if (prev.length >= 4) return prev;
-      const next = prev + d;
-      if (next.length === 4) {
-        setTimeout(() => submitPin(next), 100);
-      }
-      return next;
-    });
+    if (loadingRef.current) return;
+    if (pinRef.current.length >= 4) return;
+    pinRef.current += d;
+    setDots(pinRef.current.length);
     setError('');
-  }, [loading, submitPin]);
+    if (pinRef.current.length === 4) setTimeout(() => submitPin(pinRef.current), 100);
+  }, [submitPin]);
 
   const handleDelete = useCallback(() => {
-    if (!loading) { setPin(p => p.slice(0, -1)); setError(''); }
-  }, [loading]);
+    if (loadingRef.current) return;
+    pinRef.current = pinRef.current.slice(0, -1);
+    setDots(pinRef.current.length);
+    setError('');
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -57,8 +75,7 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
 
   return (
     <div className="w-full max-w-xs mx-auto">
-      <button onClick={onBack} className="flex items-center gap-2 text-sm mb-6"
-        style={{color:'rgba(250,247,240,0.4)'}}>← Back</button>
+      <button onClick={onBack} className="flex items-center gap-2 text-sm mb-6" style={{color:'rgba(250,247,240,0.4)'}}>← Back</button>
       <div className="text-center mb-8">
         <p className="text-lg font-semibold mb-1" style={{color:'var(--tn-cream)'}}>{title}</p>
         <p className="text-sm" style={{color:'rgba(250,247,240,0.35)'}}>{subtitle}</p>
@@ -67,32 +84,15 @@ function PinPad({ title, subtitle, onBack, onPinComplete, onSuccess }) {
       <div className={`flex justify-center gap-4 mb-2 transition-all ${shake ? 'translate-x-2' : ''}`}>
         {[0,1,2,3].map(i => (
           <div key={i} className="w-4 h-4 rounded-full transition-all"
-            style={{
-              background: i < pin.length ? 'var(--tn-red)' : 'rgba(250,247,240,0.15)',
-              transform: i < pin.length ? 'scale(1.2)' : 'scale(1)',
-            }} />
+            style={{background: i < dots ? 'var(--tn-red)' : 'rgba(250,247,240,0.15)', transform: i < dots ? 'scale(1.2)' : 'scale(1)'}} />
         ))}
       </div>
-      {error
-        ? <p className="text-center text-xs mb-4" style={{color:'#F87171'}}>{error}</p>
-        : <div className="mb-4 h-4" />
-      }
+      {error ? <p className="text-center text-xs mb-4" style={{color:'#F87171'}}>{error}</p> : <div className="mb-4 h-4" />}
       <div className="space-y-3">
         {rows.map((row, ri) => (
           <div key={ri} className="grid grid-cols-3 gap-3">
             {row.map((d, di) => (
-              <button key={di}
-                onClick={() => d === '⌫' ? handleDelete() : d ? handleDigit(d) : null}
-                disabled={!d || loading}
-                className="h-14 rounded-2xl text-xl font-medium transition-all active:scale-95"
-                style={{
-                  background: d ? 'rgba(250,247,240,0.07)' : 'transparent',
-                  color:      d ? 'var(--tn-cream)' : 'transparent',
-                  border:     d ? '0.5px solid rgba(139,105,20,0.2)' : 'none',
-                  opacity:    loading ? 0.5 : 1,
-                }}>
-                {loading && pin.length === 4 && d !== '⌫' ? '' : d}
-              </button>
+              <KeyButton key={di} digit={d} onDigit={handleDigit} onDelete={handleDelete} loading={loading} />
             ))}
           </div>
         ))}
@@ -106,13 +106,24 @@ export default function Login() {
   const navigate = useNavigate();
   const [screen, setScreen] = useState('home');
 
-  const enterAdmin = () => { login('admin', 'Admin'); navigate('/admin'); };
+  const enterAdmin = useCallback(() => {
+    login('admin', 'Admin');
+    navigate('/admin');
+  }, [login, navigate]);
 
-  const enterDriver = (driver) => {
+  const enterDriver = useCallback((driver) => {
     login(driver.id, driver.name);
-    const path = DRIVER_PATHS[driver.role]?.(driver.id) || `/driver/local/${driver.id}`;
-    navigate(path);
-  };
+    const role = driver.role || 'local';
+    if (role === 'local_route') {
+      navigate(`/driver/dual/${driver.id}`);
+    } else if (role === 'ontario') {
+      navigate('/driver/ontario');
+    } else if (role === 'quebec') {
+      navigate('/driver/quebec');
+    } else {
+      navigate(`/driver/local/${driver.id}`);
+    }
+  }, [login, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{background:'var(--tn-dark)'}}>
@@ -129,59 +140,41 @@ export default function Login() {
           <p className="text-sm mt-1" style={{color:'rgba(250,247,240,0.35)'}}>Delivery management system</p>
         </div>
 
-        {/* Home screen */}
         {screen === 'home' && (
           <div className="rounded-2xl p-5" style={{background:'rgba(250,247,240,0.04)',border:'0.5px solid rgba(139,105,20,0.2)'}}>
             <p className="text-xs uppercase tracking-wider mb-4" style={{color:'rgba(250,247,240,0.3)'}}>Select access</p>
             <div className="space-y-2">
               {[
-                { label:'Admin',         desc:'Full dashboard access · PIN required',   icon:'⚙️', accent:'rgba(192,57,43,0.15)',    border:'rgba(192,57,43,0.2)',    bg:'rgba(192,57,43,0.08)',    action:() => setScreen('admin-pin') },
-                { label:'Driver',        desc:'PIN required',                            icon:'🚚', accent:'rgba(139,105,20,0.15)',    border:'rgba(139,105,20,0.2)',    bg:'rgba(139,105,20,0.08)',    action:() => setScreen('driver-pin') },
-                { label:'Client portal', desc:'Orders, invoices & proof of delivery',   icon:'🏢', accent:'rgba(250,247,240,0.06)',   border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/portal') },
-                { label:'Track an order',desc:'Search by order number, date or address',icon:'📦', accent:'rgba(250,247,240,0.06)',   border:'rgba(250,247,240,0.08)', bg:'rgba(250,247,240,0.04)', action:() => navigate('/track') },
+                {label:'Admin',          desc:'Full dashboard access · PIN required',     icon:'⚙️', bg:'rgba(192,57,43,0.08)',  border:'rgba(192,57,43,0.2)',  action:()=>setScreen('admin-pin')},
+                {label:'Driver',         desc:'PIN required',                             icon:'🚚', bg:'rgba(139,105,20,0.08)', border:'rgba(139,105,20,0.2)', action:()=>setScreen('driver-pin')},
+                {label:'Client portal',  desc:'Orders, invoices & proof of delivery',    icon:'🏢', bg:'rgba(250,247,240,0.04)',border:'rgba(250,247,240,0.08)',action:()=>navigate('/portal')},
+                {label:'Track an order', desc:'Search by order number, date or address', icon:'📦', bg:'rgba(250,247,240,0.04)',border:'rgba(250,247,240,0.08)',action:()=>navigate('/track')},
               ].map((item, i) => (
-                <button key={i} onClick={item.action}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
-                  style={{background:item.bg, border:`0.5px solid ${item.border}`}}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{background:item.accent}}>
+                <button key={i} onClick={item.action} className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all"
+                  style={{background:item.bg,border:`0.5px solid ${item.border}`}}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{background:item.bg}}>
                     {item.icon}
                   </div>
                   <div>
                     <p className="text-sm font-medium" style={{color:'var(--tn-cream)'}}>{item.label}</p>
                     <p className="text-xs" style={{color:'rgba(250,247,240,0.3)'}}>{item.desc}</p>
                   </div>
-                  {(i === 0 || i === 1) && (
-                    <span className="ml-auto text-xs" style={{color:'rgba(250,247,240,0.3)'}}>🔒</span>
-                  )}
+                  {(i===0||i===1)&&<span className="ml-auto text-xs" style={{color:'rgba(250,247,240,0.3)'}}>🔒</span>}
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Admin PIN */}
         {screen === 'admin-pin' && (
-          <PinPad
-            title="Admin access"
-            subtitle="Enter your 4-digit PIN"
-            onBack={() => setScreen('home')}
-            onPinComplete={async (pin) => verifyPin('admin', pin)}
-            onSuccess={enterAdmin}
-          />
+          <PinPad title="Admin access" subtitle="Enter your 4-digit PIN" onBack={()=>setScreen('home')}
+            onPinComplete={async(pin)=>verifyPin('admin',pin)} onSuccess={enterAdmin} />
         )}
 
-        {/* Driver PIN — no names shown */}
         {screen === 'driver-pin' && (
-          <PinPad
-            title="Driver access"
-            subtitle="Enter your 4-digit PIN"
-            onBack={() => setScreen('home')}
-            onPinComplete={async (pin) => verifyPin('driver', pin)}
-            onSuccess={(result) => {
-              const driver = result.driver;
-              if (driver) enterDriver(driver);
-            }}
-          />
+          <PinPad title="Driver access" subtitle="Enter your 4-digit PIN" onBack={()=>setScreen('home')}
+            onPinComplete={async(pin)=>verifyPin('driver',pin)}
+            onSuccess={(result)=>{ if(result.driver) enterDriver(result.driver); }} />
         )}
 
         <p className="text-center text-xs mt-6" style={{color:'rgba(250,247,240,0.15)'}}>
