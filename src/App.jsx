@@ -10,6 +10,7 @@ import AdminPayments from './pages/admin/AdminPayments';
 import AdminImport from './pages/admin/AdminImport';
 import { AdminDrivers, AdminSettings } from './pages/admin/AdminMisc';
 import DriverLocal from './pages/driver/DriverLocal';
+import DriverDual from './pages/driver/DriverDual';
 import DriverRoute from './pages/driver/DriverRoute';
 import ClientTracking from './pages/client/ClientTracking';
 import ClientPortal from './pages/client/ClientPortal';
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="livemap" element={<AdminLiveMap />} />
           </Route>
           <Route path="/driver/local/:driverId" element={<DriverLocal />} />
+          <Route path="/driver/dual/:driverId" element={<DriverDual />} />
           <Route path="/driver/local" element={<DriverLocal />} />
           <Route path="/driver/:route" element={<DriverRoute />} />
           <Route path="/track" element={<TrackSearch />} />
