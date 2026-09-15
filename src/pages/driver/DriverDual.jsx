@@ -548,9 +548,9 @@ export default function DriverDual() {
   const driverName     = driverObj?.name     || driverId || 'Driver';
   const driverColor    = driverObj?.color    || 'var(--tn-red)';
   const driverInitials = driverObj?.initials || driverId?.substring(0,2).toUpperCase() || 'DR';
-  const route          = driverObj?.role === 'local_route' ? (driverId === 'pierre' ? 'Québec' : 'Ontario') : 'Route';
-
+const route = driverId === 'pierre' ? 'Québec' : driverId === 'jeanluc' ? 'Ontario' : 'Route';
   const [tab, setTab] = useState('route'); // default to route
+  if (!driverId) return null;
 
   return (
     <div className="min-h-screen" style={{background:'var(--tn-cream)'}}>
