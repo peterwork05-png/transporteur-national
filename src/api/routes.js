@@ -323,7 +323,23 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
 
     // Try to match client by store number or email
     let clientId = null;
-    if (storeNumber) {
+
+    // Email to client mapping — always takes priority
+    const EMAIL_CLIENT_MAP = {
+      's299pc@staples.com':           'beg_ops',
+      'sebastien.gilbert@staples.ca': 'client_6229',
+      'cindy.choquette@staples.ca':   'client_6199',
+      'patricia.ramos@staples.ca':    'staples_canada_patricia',
+      'tanya@jonarts.com':            'jonarts_ops',
+      'orders@jonarts.ca':            'jonarts_ops',
+      'accounting@jonarts.com':       'jonarts_finance',
+      'aebath@gmail.com':             'aebath',
+    };
+    if (order.billing_email && EMAIL_CLIENT_MAP[order.billing_email.toLowerCase()]) {
+      clientId = EMAIL_CLIENT_MAP[order.billing_email.toLowerCase()];
+    }
+
+    if (!clientId && order.store_number) {
       const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${storeNumber}%`]);
       if (rows.length > 0) clientId = rows[0].id;
     }
