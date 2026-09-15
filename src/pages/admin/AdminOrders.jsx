@@ -217,8 +217,8 @@ export default function AdminOrders() {
     else setSelectedIds(new Set(filtered.map(o => o.id)));
   };
 
-  const localDrivers = drivers.filter(d => d.role === 'local');
-
+const localDrivers = drivers.filter(d => d.role === 'local' || d.role === 'local_route');
+  
   // Fix #8 — mark delivered from admin and refresh properly
   const markDelivered = async () => {
     const now = new Date().toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true });
