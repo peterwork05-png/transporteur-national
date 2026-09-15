@@ -78,7 +78,15 @@ export default function AdminOrders() {
           driver_id: editForm.driver_id,
         } : o));
       }
-      setSelected(prev => ({ ...prev, ...editForm, driver: editForm.driver_id, driver_id: editForm.driver_id }));
+      const fullDriver = drivers.find(d => d.id === editForm.driver_id);
+setSelected(prev => ({ 
+  ...prev, ...editForm, 
+  driver: editForm.driver_id, 
+  driver_id: editForm.driver_id,
+  driverName: fullDriver?.name || editForm.driver_id,
+  driverInitials: fullDriver?.initials || editForm.driver_id?.substring(0,2).toUpperCase(),
+  driverColor: fullDriver?.color || 'var(--tn-red)',
+}));
       setShowEdit(false);
     } catch(e) { console.error(e); }
     setSaving(false);
