@@ -160,7 +160,11 @@ setSelected(prev => ({
   ];
 
   const clientName = (o) => o.clientName || o.client_name || o.to_business_name || o.billing_name || CLIENTS[o.client]?.name || o.client || '—';
-  const driverName = (o) => o.driverName || o.driver_name || o.driver || '—';
+  const driverName = (o) => {
+  const id = o.driver_id || o.driver;
+  const found = drivers?.find(d => d.id === id);
+  return o.driverName || o.driver_name || found?.name || id || '—';
+};
 
   const assignDriver = async (orderId, driverId) => {
     setAssigning(true);
