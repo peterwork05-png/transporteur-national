@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
+import { ONTARIO_STOPS, QUEBEC_STOPS } from '../../data/store';
 
 const STATUS_RANK  = { waiting:0, accepted:1, picked:2, enroute:3, delivered:4, attempted:3 };
 const STATUS_LABEL = { waiting:'Awaiting pickup', accepted:'Accepted', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
@@ -370,37 +371,6 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 }
 
 // ─── ROUTE TAB ───────────────────────────────────────────────────────────────
-
-const ONTARIO_STOPS = [
-  'Staples Kanata (6-2600 Iris St, Kanata)',
-  'Staples Nepean (2-1536 Merivale Rd, Nepean)',
-  'Staples Barrhaven (101-3651 Strandherd Dr, Nepean)',
-  'Staples Orleans (1-2323 St Joseph Blvd, Orleans)',
-  'Staples Gloucester (1500 Blair Rd, Gloucester)',
-  'Staples Bank St (2210 Bank St, Ottawa)',
-  'Staples Rideau (1035 Cyrville Rd, Ottawa)',
-  'Staples Gatineau Hull (wrhs) (10 rue Eddy, Gatineau)',
-  'Staples Aylmer (181 ch Doherty, Gatineau)',
-  'Staples Gatineau (696 boul Maloney E, Gatineau)',
-  'Staples Buckingham (355 rue Joseph, Gatineau)',
-  'Staples Masson-Angers (880 boul St-René E, Gatineau)',
-  'Staples Ottawa (wrhs) (2350 Stevenage Dr, Ottawa)',
-  'Staples Beacon Hill (Place Beacon Hill, Ottawa)',
-  'Staples Hazeldean (300 Eagleson Rd, Kanata)',
-];
-
-const QUEBEC_STOPS = [
-  'Staples Laval (4141 autoroute 440 Ouest, Laval)',
-  'Staples Terrebonne (1185 montée Masson, Terrebonne)',
-  'Staples Repentigny (934 boul Iberville, Repentigny)',
-  'Staples Boisbriand (3530 boul de la Grande-Allée, Boisbriand)',
-  'Staples Saint-Jérôme (700 boul du Séminaire N, Saint-Jérôme)',
-  'Staples Sainte-Thérèse (450 boul Curé-Labelle, Sainte-Thérèse)',
-  'Staples Bois-des-Filion (990 montée Monette, Bois-des-Filion)',
-  'Staples Mascouche (170 montée Masson, Mascouche)',
-  'Staples Joliette (795 boul Firestone, Joliette)',
-  'Staples Lachenaie (1100 montée Masson, Terrebonne)',
-];
 
 function RouteTab({ driverId, route }) {
   const [progress, setProgress] = useState(null);
