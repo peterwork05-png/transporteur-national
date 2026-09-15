@@ -371,44 +371,237 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 
 // ─── ROUTE TAB ───────────────────────────────────────────────────────────────
 
-function RouteTab({ driverId, route }) {
-  const [stops,   setStops]   = useState([]);
-  const [loading, setLoading] = useState(true);
+const ONTARIO_STOPS = [
+  'Staples Kanata (6-2600 Iris St, Kanata)',
+  'Staples Nepean (2-1536 Merivale Rd, Nepean)',
+  'Staples Barrhaven (101-3651 Strandherd Dr, Nepean)',
+  'Staples Orleans (1-2323 St Joseph Blvd, Orleans)',
+  'Staples Gloucester (1500 Blair Rd, Gloucester)',
+  'Staples Bank St (2210 Bank St, Ottawa)',
+  'Staples Rideau (1035 Cyrville Rd, Ottawa)',
+  'Staples Gatineau Hull (wrhs) (10 rue Eddy, Gatineau)',
+  'Staples Aylmer (181 ch Doherty, Gatineau)',
+  'Staples Gatineau (696 boul Maloney E, Gatineau)',
+  'Staples Buckingham (355 rue Joseph, Gatineau)',
+  'Staples Masson-Angers (880 boul St-René E, Gatineau)',
+  'Staples Ottawa (wrhs) (2350 Stevenage Dr, Ottawa)',
+  'Staples Beacon Hill (Place Beacon Hill, Ottawa)',
+  'Staples Hazeldean (300 Eagleson Rd, Kanata)',
+];
 
-  useEffect(() => {
-    fetch(`/api/routes/today?driver_id=${driverId}`)
-      .then(r => r.json())
-      .then(data => { setStops(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [driverId]);
+const QUEBEC_STOPS = [
+  'Staples Laval (4141 autoroute 440 Ouest, Laval)',
+  'Staples Terrebonne (1185 montée Masson, Terrebonne)',
+  'Staples Repentigny (934 boul Iberville, Repentigny)',
+  'Staples Boisbriand (3530 boul de la Grande-Allée, Boisbriand)',
+  'Staples Saint-Jérôme (700 boul du Séminaire N, Saint-Jérôme)',
+  'Staples Sainte-Thérèse (450 boul Curé-Labelle, Sainte-Thérèse)',
+  'Staples Bois-des-Filion (990 montée Monette, Bois-des-Filion)',
+  'Staples Mascouche (170 montée Masson, Mascouche)',
+  'Staples Joliette (795 boul Firestone, Joliette)',
+  'Staples Lachenaie (1100 montée Masson, Terrebonne)',
+];
+
+function RouteTab({ driverId, route }) {
+  const [progress, setProgress] = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+
+  const routeKey = driverId === 'pierre' ? 'quebec' : 'ontario';
+  const stops    = routeKey === 'ontario' ? ONTARIO_STOPS : QUEBEC_STOPS;
+
+  const fetchProgress = async () => {
+    try {
+      const res  = await fetch('/api/routes/progress');
+      const data = await res.json();
+      setProgress(data[routeKey] || {
+        started: false, startTime: null, holiday: false, done: false,
+        stopStatus: new Array(stops.length).fill(null),
+        arrivals:   new Array(stops.length).fill(null),
+      });
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchProgress(); }, []);
+
+  const saveProgress = async (updated) => {
+    setSaving(true);
+    try {
+      await fetch(`/api/routes/${routeKey}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const toggleStop = async (i) => {
+    if (!progress) return;
+    const newStatus = [...(progress.stopStatus || [])];
+    const now = new Date().toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true });
+    const newArrivals = [...(progress.arrivals || [])];
+    if (newStatus[i] === 'done') {
+      newStatus[i] = null;
+      newArrivals[i] = null;
+    } else {
+      newStatus[i] = 'done';
+      newArrivals[i] = now;
+    }
+    const updated = { ...progress, stopStatus: newStatus, arrivals: newArrivals };
+    setProgress(updated);
+    await saveProgress(updated);
+  };
 
   if (loading) return <div className="flex items-center justify-center py-20"><p style={{color:'var(--tn-gold)'}}>Loading route...</p></div>;
 
+  const completed = (progress?.stopStatus || []).filter(s => s === 'done').length;
+
   return (
     <div className="p-4 max-w-lg mx-auto">
-      {stops.length === 0 ? (
+      {/* Progress bar */}
+      <div className="card p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-medium text-sm">Route {route}</p>
+          <p className="text-sm font-semibold" style={{color:'var(--tn-red)'}}>{completed}/{stops.length} stops</p>
+        </div>
+        <div className="w-full rounded-full h-2" style={{background:'var(--tn-warm)'}}>
+          <div className="h-2 rounded-full transition-all" style={{width:`${(completed/stops.length)*100}%`,background:'var(--tn-red)'}}/>
+        </div>
+      </div>
+
+      {/* Stops */}
+      <div className="space-y-2">
+        {stops.map((stop, i) => {
+          const isDone    = progress?.stopStatus?.[i] === 'done';
+          const arrivalTime = progress?.arrivals?.[i];
+          return (
+            <div key={i} className="card p-3" style={{opacity: isDone ? 0.6 : 1}}>
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{background: isDone ? '#0F6E56' : 'var(--tn-red)', color:'white'}}>
+                  {isDone ? '✓' : i+1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{stop.split('(')[0].trim()}</p>
+                  <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stop.match(/\(([^)]+)\)/)?.[1] || ''}</p>
+                  {isDone && arrivalTime && <p className="text-xs" style={{color:'#0F6E56'}}>✓ Done at {arrivalTime}</p>}
+                </div>
+                <button onClick={() => toggleStop(i)} disabled={saving}
+                  className="btn btn-sm flex-shrink-0 text-xs"
+                  style={{background: isDone?'#FEF3C7':'#0F6E56', color: isDone?'#92400E':'white', minWidth:'60px'}}>
+                  {isDone ? '↩ Undo' : '✓ Done'}
+                </button>
+              </div>
+              <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.match(/\(([^)]+)\)/)?.[1] || stop)}`, '_blank')}
+                className="mt-2 w-full flex items-center justify-center gap-1 py-1 rounded-lg text-xs"
+                style={{background:'#185FA5',color:'white'}}>
+                🗺️ Google Maps
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    fetch(`/api/route-days?driver_id=${driverId}&date=${today}`)
+      .then(r => r.json())
+      .then(async days => {
+        const day = Array.isArray(days) ? days[0] : null;
+        setRouteDay(day);
+        if (day?.id) {
+          const res = await fetch(`/api/route-stops?route_day_id=${day.id}`);
+          const data = await res.json();
+          setStops(Array.isArray(data) ? data : []);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [driverId]);
+
+  const toggleStop = async (stop) => {
+    const newStatus = stop.status === 'completed' ? 'pending' : 'completed';
+    setUpdating(stop.id);
+    try {
+      await fetch(`/api/route-stops/${stop.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setStops(prev => prev.map(s => s.id === stop.id ? { ...s, status: newStatus } : s));
+    } catch(e) { console.error(e); }
+    setUpdating(null);
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-20"><p style={{color:'var(--tn-gold)'}}>Loading route...</p></div>;
+
+  const completed = stops.filter(s => s.status === 'completed').length;
+
+  return (
+    <div className="p-4 max-w-lg mx-auto">
+      {!routeDay ? (
         <div className="card p-8 text-center">
           <p className="text-3xl mb-2">🗺️</p>
-          <p className="font-medium">No route stops for today</p>
-          <p className="text-sm mt-1" style={{color:'var(--tn-gold)'}}>Check back later or contact admin</p>
+          <p className="font-medium">No route scheduled for today</p>
+          <p className="text-sm mt-1" style={{color:'var(--tn-gold)'}}>Contact admin to set up today's route</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {stops.map((stop, i) => (
-            <div key={i} className="card p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 text-white" style={{background:'var(--tn-red)'}}>
-                  {i + 1}
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">{stop.name || stop.address}</p>
-                  {stop.address && stop.name && <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>{stop.address}</p>}
-                  {stop.notes && <p className="text-xs mt-1" style={{color:'#92400E'}}>{stop.notes}</p>}
-                </div>
-              </div>
+        <>
+          {/* Progress */}
+          <div className="card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-medium text-sm">Route {route} — {new Date().toLocaleDateString('en-CA', {weekday:'long', month:'long', day:'numeric'})}</p>
+              <p className="text-sm font-semibold" style={{color:'var(--tn-red)'}}>{completed}/{stops.length}</p>
             </div>
-          ))}
-        </div>
+            <div className="w-full rounded-full h-2" style={{background:'var(--tn-warm)'}}>
+              <div className="h-2 rounded-full transition-all" style={{width:`${stops.length>0?(completed/stops.length)*100:0}%`,background:'var(--tn-red)'}}/>
+            </div>
+          </div>
+
+          {stops.length === 0 ? (
+            <div className="card p-8 text-center">
+              <p className="text-3xl mb-2">📍</p>
+              <p className="font-medium">No stops added yet</p>
+              <p className="text-sm mt-1" style={{color:'var(--tn-gold)'}}>Admin will add stops to your route</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {stops.map((stop, i) => (
+                <div key={stop.id} className="card p-4" style={{opacity: stop.status==='completed' ? 0.6 : 1}}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                      style={{background: stop.status==='completed' ? '#0F6E56' : 'var(--tn-red)', color:'white'}}>
+                      {stop.status==='completed' ? '✓' : i+1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{stop.business_name || stop.address}</p>
+                      {stop.address && stop.business_name && <p className="text-xs mt-0.5 truncate" style={{color:'var(--tn-gold)'}}>{stop.address}</p>}
+                      {stop.contact_name && <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>👤 {stop.contact_name}</p>}
+                      {stop.notes && <p className="text-xs mt-1 p-2 rounded-lg" style={{background:'#FEF3C7',color:'#92400E'}}>{stop.notes}</p>}
+                    </div>
+                    <button onClick={() => toggleStop(stop)} disabled={updating===stop.id}
+                      className="btn btn-sm flex-shrink-0 text-xs"
+                      style={{background: stop.status==='completed'?'#FEF3C7':'#0F6E56', color: stop.status==='completed'?'#92400E':'white'}}>
+                      {updating===stop.id ? '⏳' : stop.status==='completed' ? '↩ Undo' : '✓ Done'}
+                    </button>
+                  </div>
+                  {stop.address && (
+                    <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.address)}`, '_blank')}
+                      className="mt-2 w-full flex items-center justify-center gap-2 py-1.5 rounded-xl text-xs font-medium"
+                      style={{background:'#185FA5',color:'white'}}>
+                      🗺️ Open in Google Maps
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
