@@ -507,37 +507,6 @@ function RouteTab({ driverId, route }) {
   );
 }
 
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    fetch(`/api/route-days?driver_id=${driverId}&date=${today}`)
-      .then(r => r.json())
-      .then(async days => {
-        const day = Array.isArray(days) ? days[0] : null;
-        setRouteDay(day);
-        if (day?.id) {
-          const res = await fetch(`/api/route-stops?route_day_id=${day.id}`);
-          const data = await res.json();
-          setStops(Array.isArray(data) ? data : []);
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [driverId]);
-
-  const toggleStop = async (stop) => {
-    const newStatus = stop.status === 'completed' ? 'pending' : 'completed';
-    setUpdating(stop.id);
-    try {
-      await fetch(`/api/route-stops/${stop.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      setStops(prev => prev.map(s => s.id === stop.id ? { ...s, status: newStatus } : s));
-    } catch(e) { console.error(e); }
-    setUpdating(null);
-  };
-
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 
 export default function DriverDual() {
@@ -548,9 +517,9 @@ export default function DriverDual() {
   const driverName     = driverObj?.name     || driverId || 'Driver';
   const driverColor    = driverObj?.color    || 'var(--tn-red)';
   const driverInitials = driverObj?.initials || driverId?.substring(0,2).toUpperCase() || 'DR';
-const route = driverId === 'pierre' ? 'Québec' : driverId === 'jeanluc' ? 'Ontario' : 'Route';
+  const route          = driverObj?.role === 'local_route' ? (driverId === 'pierre' ? 'Québec' : 'Ontario') : 'Route';
+
   const [tab, setTab] = useState('route'); // default to route
-  if (!driverId) return null;
 
   return (
     <div className="min-h-screen" style={{background:'var(--tn-cream)'}}>
