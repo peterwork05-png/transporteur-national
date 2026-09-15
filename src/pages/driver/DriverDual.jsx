@@ -444,8 +444,11 @@ function RouteTab({ driverId, route }) {
       {/* Stops */}
       <div className="space-y-2">
         {stops.map((stop, i) => {
-          const isDone    = progress?.stopStatus?.[i] === 'done';
+          const isDone      = progress?.stopStatus?.[i] === 'done';
           const arrivalTime = progress?.arrivals?.[i];
+          const stopName    = typeof stop === 'string' ? stop : (stop.name || stop.store || stop.address || `Stop ${i+1}`);
+          const stopAddress = typeof stop === 'string' ? '' : (stop.address || stop.city || '');
+          const mapsQuery   = typeof stop === 'string' ? stop : (stop.address || stop.name || '');
           return (
             <div key={i} className="card p-3" style={{opacity: isDone ? 0.6 : 1}}>
               <div className="flex items-center gap-3">
@@ -454,8 +457,8 @@ function RouteTab({ driverId, route }) {
                   {isDone ? '✓' : i+1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{stop.split('(')[0].trim()}</p>
-                  <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stop.match(/\(([^)]+)\)/)?.[1] || ''}</p>
+                  <p className="text-sm font-medium truncate">{stopName}</p>
+                  {stopAddress && <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stopAddress}</p>}
                   {isDone && arrivalTime && <p className="text-xs" style={{color:'#0F6E56'}}>✓ Done at {arrivalTime}</p>}
                 </div>
                 <button onClick={() => toggleStop(i)} disabled={saving}
@@ -464,11 +467,13 @@ function RouteTab({ driverId, route }) {
                   {isDone ? '↩ Undo' : '✓ Done'}
                 </button>
               </div>
-              <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.match(/\(([^)]+)\)/)?.[1] || stop)}`, '_blank')}
-                className="mt-2 w-full flex items-center justify-center gap-1 py-1 rounded-lg text-xs"
-                style={{background:'#185FA5',color:'white'}}>
-                🗺️ Google Maps
-              </button>
+              {mapsQuery && (
+                <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`, '_blank')}
+                  className="mt-2 w-full flex items-center justify-center gap-1 py-1 rounded-lg text-xs"
+                  style={{background:'#185FA5',color:'white'}}>
+                  🗺️ Google Maps
+                </button>
+              )}
             </div>
           );
         })}
