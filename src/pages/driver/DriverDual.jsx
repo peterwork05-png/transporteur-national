@@ -373,27 +373,53 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 // ─── ROUTE TAB ───────────────────────────────────────────────────────────────
 
 function RouteTab({ driverId, route }) {
-  const [progress, setProgress] = useState(null);
-  const [loading,  setLoading]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
-
   const routeKey = driverId === 'pierre' ? 'quebec' : 'ontario';
   const stops    = routeKey === 'ontario' ? ONTARIO_STOPS : QUEBEC_STOPS;
 
-  const fetchProgress = async () => {
-    try {
-      const res  = await fetch('/api/routes/progress');
-      const data = await res.json();
-      setProgress(data[routeKey] || {
-        started: false, startTime: null, holiday: false, done: false,
-        stopStatus: new Array(stops.length).fill(null),
-        arrivals:   new Array(stops.length).fill(null),
-      });
-    } catch(e) { console.error(e); }
-    setLoading(false);
+  const today = new Date().toISOString().split('T')[0];
+  const STORAGE_KEY = `route_${routeKey}_date`;
+
+  const defaultProgress = {
+    started:    false,
+    startTime:  null,
+    holiday:    false,
+    done:       false,
+    stopStatus: new Array(stops.length).fill(null),
+    arrivals:   new Array(stops.length).fill(null),
   };
 
-  useEffect(() => { fetchProgress(); }, []);
+  const [progress, setProgress] = useState(defaultProgress);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+
+  useEffect(() => {
+    const fetchProgress = async () => {
+      // Auto-reset if new day
+      const lastDate = localStorage.getItem(STORAGE_KEY);
+      if (lastDate !== today) {
+        await fetch(`/api/routes/${routeKey}/reset`, { method: 'POST' });
+        localStorage.setItem(STORAGE_KEY, today);
+      }
+      try {
+        const res  = await fetch('/api/routes/progress');
+        const data = await res.json();
+        if (data[routeKey]) {
+          setProgress({
+            started:    data[routeKey].started    || false,
+            startTime:  data[routeKey].startTime  || null,
+            holiday:    data[routeKey].holiday    || false,
+            done:       data[routeKey].done       || false,
+            stopStatus: data[routeKey].stopStatus || new Array(stops.length).fill(null),
+            arrivals:   data[routeKey].arrivals   || new Array(stops.length).fill(null),
+          });
+        } else {
+          setProgress(defaultProgress);
+        }
+      } catch(e) { console.error(e); }
+      setLoading(false);
+    };
+    fetchProgress();
+  }, []);
 
   const saveProgress = async (updated) => {
     setSaving(true);
@@ -407,16 +433,34 @@ function RouteTab({ driverId, route }) {
     setSaving(false);
   };
 
-  const toggleStop = async (i) => {
-    if (!progress) return;
-    const newStatus = [...(progress.stopStatus || [])];
+  const handleStartRoute = async () => {
     const now = new Date().toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true });
-    const newArrivals = [...(progress.arrivals || [])];
+    const updated = { ...progress, started: true, startTime: now };
+    setProgress(updated);
+    await saveProgress(updated);
+  };
+
+  const handleDoneRoute = async () => {
+    const updated = { ...progress, done: true };
+    setProgress(updated);
+    await saveProgress(updated);
+  };
+
+  const handleHoliday = async () => {
+    const updated = { ...progress, holiday: !progress.holiday };
+    setProgress(updated);
+    await saveProgress(updated);
+  };
+
+  const toggleStop = async (i) => {
+    const newStatus   = [...(progress.stopStatus || [])];
+    const newArrivals = [...(progress.arrivals   || [])];
+    const now = new Date().toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true });
     if (newStatus[i] === 'done') {
-      newStatus[i] = null;
+      newStatus[i]   = null;
       newArrivals[i] = null;
     } else {
-      newStatus[i] = 'done';
+      newStatus[i]   = 'done';
       newArrivals[i] = now;
     }
     const updated = { ...progress, stopStatus: newStatus, arrivals: newArrivals };
@@ -426,28 +470,75 @@ function RouteTab({ driverId, route }) {
 
   if (loading) return <div className="flex items-center justify-center py-20"><p style={{color:'var(--tn-gold)'}}>Loading route...</p></div>;
 
-  const completed = (progress?.stopStatus || []).filter(s => s === 'done').length;
+  const completed = (progress.stopStatus || []).filter(s => s === 'done').length;
+
+  if (progress.holiday) {
+    return (
+      <div className="p-4 max-w-lg mx-auto">
+        <div className="card p-8 text-center">
+          <p className="text-4xl mb-3">🌴</p>
+          <p className="font-semibold text-lg mb-2">Holiday / Day Off</p>
+          <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>No route today</p>
+          <button onClick={handleHoliday} className="btn btn-outline">↩ Cancel holiday</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (progress.done) {
+    return (
+      <div className="p-4 max-w-lg mx-auto">
+        <div className="card p-8 text-center">
+          <p className="text-4xl mb-3">✅</p>
+          <p className="font-semibold text-lg mb-2">Route completed!</p>
+          <p className="text-sm mb-4" style={{color:'var(--tn-gold)'}}>All {stops.length} stops done · Started at {progress.startTime}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 max-w-lg mx-auto">
+      {/* Start / Holiday buttons */}
+      {!progress.started && (
+        <div className="flex gap-2 mb-4">
+          <button onClick={handleStartRoute} className="btn flex-1 justify-center" style={{background:'var(--tn-red)',color:'white'}}>
+            🚚 Start route
+          </button>
+          <button onClick={handleHoliday} className="btn btn-outline flex-shrink-0 px-3 text-xs">
+            🌴 Holiday
+          </button>
+        </div>
+      )}
+
       {/* Progress bar */}
-      <div className="card p-4 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="font-medium text-sm">Route {route}</p>
-          <p className="text-sm font-semibold" style={{color:'var(--tn-red)'}}>{completed}/{stops.length} stops</p>
+      {progress.started && (
+        <div className="card p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="font-medium text-sm">Route {route}</p>
+              {progress.startTime && <p className="text-xs" style={{color:'var(--tn-gold)'}}>Started at {progress.startTime}</p>}
+            </div>
+            <p className="text-sm font-semibold" style={{color:'var(--tn-red)'}}>{completed}/{stops.length}</p>
+          </div>
+          <div className="w-full rounded-full h-2 mb-3" style={{background:'var(--tn-warm)'}}>
+            <div className="h-2 rounded-full transition-all" style={{width:`${(completed/stops.length)*100}%`,background:'var(--tn-red)'}}/>
+          </div>
+          {completed === stops.length && (
+            <button onClick={handleDoneRoute} className="btn w-full justify-center" style={{background:'#0F6E56',color:'white'}}>
+              ✅ Mark route as done
+            </button>
+          )}
         </div>
-        <div className="w-full rounded-full h-2" style={{background:'var(--tn-warm)'}}>
-          <div className="h-2 rounded-full transition-all" style={{width:`${(completed/stops.length)*100}%`,background:'var(--tn-red)'}}/>
-        </div>
-      </div>
+      )}
 
       {/* Stops */}
       <div className="space-y-2">
         {stops.map((stop, i) => {
-          const isDone      = progress?.stopStatus?.[i] === 'done';
-          const arrivalTime = progress?.arrivals?.[i];
-          const stopName    = typeof stop === 'string' ? stop : (stop.name || stop.store || stop.address || `Stop ${i+1}`);
-          const stopAddress = typeof stop === 'string' ? '' : (stop.address || stop.city || '');
+          const isDone      = progress.stopStatus?.[i] === 'done';
+          const arrivalTime = progress.arrivals?.[i];
+          const stopName    = typeof stop === 'string' ? stop.split('(')[0].trim() : (stop.name || stop.store || `Stop ${i+1}`);
+          const stopAddress = typeof stop === 'string' ? (stop.match(/\(([^)]+)\)/)?.[1] || '') : (stop.address || stop.city || '');
           const mapsQuery   = typeof stop === 'string' ? stop : (stop.address || stop.name || '');
           return (
             <div key={i} className="card p-3" style={{opacity: isDone ? 0.6 : 1}}>
@@ -461,11 +552,13 @@ function RouteTab({ driverId, route }) {
                   {stopAddress && <p className="text-xs truncate" style={{color:'var(--tn-gold)'}}>{stopAddress}</p>}
                   {isDone && arrivalTime && <p className="text-xs" style={{color:'#0F6E56'}}>✓ Done at {arrivalTime}</p>}
                 </div>
-                <button onClick={() => toggleStop(i)} disabled={saving}
-                  className="btn btn-sm flex-shrink-0 text-xs"
-                  style={{background: isDone?'#FEF3C7':'#0F6E56', color: isDone?'#92400E':'white', minWidth:'60px'}}>
-                  {isDone ? '↩ Undo' : '✓ Done'}
-                </button>
+                {progress.started && (
+                  <button onClick={() => toggleStop(i)} disabled={saving}
+                    className="btn btn-sm flex-shrink-0 text-xs"
+                    style={{background: isDone?'#FEF3C7':'#0F6E56', color: isDone?'#92400E':'white', minWidth:'60px'}}>
+                    {isDone ? '↩ Undo' : '✓ Done'}
+                  </button>
+                )}
               </div>
               {mapsQuery && (
                 <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`, '_blank')}
