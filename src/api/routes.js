@@ -1607,6 +1607,14 @@ router.delete('/invoices/:id/delete-pdf', async (req, res) => {
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+// Update PO number on invoice
+router.patch('/invoices/:id/po-number', async (req, res) => {
+  try {
+    const { po_number } = req.body;
+    await pool.query(`UPDATE invoices SET po_number = $1 WHERE id = $2`, [po_number || null, req.params.id]);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 export default router;
 
 // ── GMAIL AUTO-MATCHING ───────────────────────────────────
