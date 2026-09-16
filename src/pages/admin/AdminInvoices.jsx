@@ -781,7 +781,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
               {form.type==='contract'&&(<div><label className="label">Days driven</label><select className="input" value={form.days} onChange={e=>setForm(f=>({...f,days:parseInt(e.target.value)}))}>{[1,2,3,4,5,6].map(d=><option key={d} value={d}>{d} day{d>1?'s':''}</option>)}</select></div>)}
               {form.type==='contract'&&(<div><label className="label">Total amount (leave blank to auto-calculate)</label><input type="number" className="input" placeholder="e.g. 4311.51" step="0.01" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/></div>)}
               {form.type==='local'&&(<div className="rounded-xl p-3" style={{background:'#EFF6FF',border:'0.5px solid #185FA5'}}><p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Amount calculated automatically when you open the invoice.</p></div>)}
-              {form.client === 'staples_canada' && (
+              {(form.client === 'staples_canada' || form.client === 'client_6229') && (
   <div><label className="label">PO Number</label><input className="input" placeholder="e.g. 10997280" value={form.po_number||''} onChange={e=>setForm(f=>({...f,po_number:e.target.value}))}/></div>
 )}
               <div><label className="label">Status</label><select className="input" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}><option value="pending">Pending</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div>
