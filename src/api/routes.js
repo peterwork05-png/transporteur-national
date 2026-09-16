@@ -529,16 +529,16 @@ router.get('/invoices', async (req, res) => {
 
 router.post('/invoices', async (req, res) => {
   try {
-    const { id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total } = req.body;
+    const { id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total, po_number } = req.body;
     let query, params;
     if (id) {
-      query = `INSERT INTO invoices (id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`;
-      params = [id, type, client_id || null, route, date_from, date_to, days, subtotal, tps, tvq, total];
+      query = `INSERT INTO invoices (id, type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total, po_number)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
+      params = [id, type, client_id || null, route, date_from, date_to, days, subtotal, tps, tvq, total, po_number || null];
     } else {
-      query = `INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`;
-      params = [type, client_id || null, route, date_from, date_to, days, subtotal, tps, tvq, total];
+      query = `INSERT INTO invoices (type, client_id, route, date_from, date_to, days, subtotal, tps, tvq, total, po_number)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`;
+      params = [type, client_id || null, route, date_from, date_to, days, subtotal, tps, tvq, total, po_number || null];
     }
     const { rows } = await pool.query(query, params);
     res.json(rows[0]);
