@@ -32,6 +32,22 @@ export default function AdminInvoices() {
   const [showClientSelect, setShowClientSelect] = useState(false);
   const [allClients, setAllClients] = useState([]);
   const [savingClient, setSavingClient] = useState(false);
+    // PO number edit state
+  const [showEditPO, setShowEditPO] = useState(false);
+  const [editPO,     setEditPO]     = useState('');
+
+  const handleSavePO = async () => {
+    try {
+      await fetch(`/api/invoices/${selected.id}/po-number`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ po_number: editPO }),
+      });
+      await fetchInvoices();
+      setSelected(prev => ({ ...prev, po_number: editPO }));
+      setShowEditPO(false);
+    } catch(e) { console.error(e); }
+  };
   const [invoiceOrders, setInvoiceOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [showAddOrder, setShowAddOrder] = useState(false);
@@ -188,6 +204,18 @@ export default function AdminInvoices() {
       await fetchInvoiceOrders(selected.id,'local'); await fetchInvoices();
       const res=await fetch('/api/invoices'); const data=await res.json(); const updated=data.find(i=>i.id===selected.id);
       if(updated)setSelected(prev=>({...prev,...updated,amount:parseFloat(updated.total||0)}));
+      // Auto-pull PO number for Staples Canada invoices
+if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6229') && !selected.po_number) {
+  const addedOrder = addOrderResults.find(o => o.id === orderId) || {};
+  if (addedOrder.po_number) {
+    await fetch(`/api/invoices/${selected.id}/po-number`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ po_number: addedOrder.po_number }),
+    });
+    setSelected(prev => ({ ...prev, po_number: addedOrder.po_number }));
+  }
+}
       setAddOrderSearch(''); setAddOrderResults([]); setShowAddOrder(false);
     } catch(e){console.error(e);}
     setAddingOrder(false);
@@ -402,10 +430,11 @@ export default function AdminInvoices() {
                   {label:'Client', val:getClientName(selected), clickable:true},
                   {label:'Type', val:selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
                   {label:'Period', val:`${String(selected.date_from||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
+          selected.client_id === 'staples_canada' || selected.client_id === 'client_6229' ? {label:'PO Number ✏️', val: selected.po_number || 'Not set', clickable: 'po'} : null,
                   selected.type==='contract'&&selected.days?{label:'Days', val:`${selected.days} days`}:null,
                 ].filter(Boolean).filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)',cursor:item.clickable?'pointer':'default'}}
-                    onClick={item.clickable?()=>{fetchAllClients();setShowClientSelect(true);}:undefined}>
+                    onClick={item.clickable==='client'?()=>{fetchAllClients();setShowClientSelect(true);}:item.clickable==='po'?()=>{setEditPO(selected.po_number||'');setShowEditPO(true);}:undefined}>
                     <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label} {item.clickable&&<span style={{color:'var(--tn-red)'}}>✏️</span>}</p>
                     <p className="font-semibold text-sm mt-0.5">{item.val}</p>
                   </div>
@@ -426,6 +455,18 @@ export default function AdminInvoices() {
                   {savingClient&&<p className="text-xs mt-1" style={{color:'#185FA5'}}>⏳ Saving...</p>}
                 </div>
               )}
+              {showEditPO && (
+  <div className="rounded-xl p-4" style={{background:'#EFF6FF', border:'0.5px solid #185FA5'}}>
+    <div className="flex items-center justify-between mb-2">
+      <p className="text-xs font-medium" style={{color:'#185FA5'}}>Edit PO Number</p>
+      <button onClick={() => setShowEditPO(false)} className="text-xs" style={{color:'#185FA5'}}>✕ Cancel</button>
+    </div>
+    <input className="input mb-2" placeholder="e.g. 10997280" value={editPO} onChange={e=>setEditPO(e.target.value)}/>
+    <button onClick={handleSavePO} className="btn w-full justify-center text-xs" style={{background:'var(--tn-red)',color:'white'}}>
+      💾 Save PO Number
+    </button>
+  </div>
+)}
 
               {/* Contract edit */}
               {selected.type==='contract'&&(
