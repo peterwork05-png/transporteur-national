@@ -49,7 +49,7 @@ export default function AdminInvoices() {
   const [editEmailSubject, setEditEmailSubject] = useState('');
   const [editEmailNote, setEditEmailNote] = useState('');
   const [showEmailBody, setShowEmailBody] = useState(false);
-  const [form, setForm] = useState({ invNum:'', type:'local', route:'ontario', client:'', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending' });
+  const [form, setForm] = useState({ invNum:'', type:'local', route:'ontario', client:'', days:5, dateFrom:'', dateTo:'', amount:'', status:'pending', po_number:'' });
   const [sortBy, setSortBy] = useState('id_desc');
   const [search, setSearch] = useState('');
 
@@ -143,7 +143,12 @@ export default function AdminInvoices() {
 
   const handleCreate = async () => {
     let total=parseFloat(form.amount)||0; if(form.type==='contract'&&!form.amount)total=calcTotals().total;
-    await addInvoice({id:form.invNum,type:form.type,route:form.route,client:form.client||null,dates:`${form.dateFrom} – ${form.dateTo}`,amount:Math.round(total*100)/100,days:form.days,status:form.status,date_from:form.dateFrom,date_to:form.dateTo});
+    await addInvoice({
+  id: form.invNum, type: form.type, route: form.route, client: form.client || null,
+  dates: `${form.dateFrom} – ${form.dateTo}`, amount: Math.round(total * 100) / 100,
+  days: form.days, status: form.status, date_from: form.dateFrom, date_to: form.dateTo,
+  po_number: form.po_number || null,
+});
     await fetchInvoices(); setShowNew(false); setForm({invNum:'',type:'local',route:'ontario',client:'',days:5,dateFrom:'',dateTo:'',amount:'',status:'pending'});
   };
 
@@ -735,6 +740,9 @@ export default function AdminInvoices() {
               {form.type==='contract'&&(<div><label className="label">Days driven</label><select className="input" value={form.days} onChange={e=>setForm(f=>({...f,days:parseInt(e.target.value)}))}>{[1,2,3,4,5,6].map(d=><option key={d} value={d}>{d} day{d>1?'s':''}</option>)}</select></div>)}
               {form.type==='contract'&&(<div><label className="label">Total amount (leave blank to auto-calculate)</label><input type="number" className="input" placeholder="e.g. 4311.51" step="0.01" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/></div>)}
               {form.type==='local'&&(<div className="rounded-xl p-3" style={{background:'#EFF6FF',border:'0.5px solid #185FA5'}}><p className="text-xs" style={{color:'#185FA5'}}>ℹ️ Amount calculated automatically when you open the invoice.</p></div>)}
+              {form.client === 'staples_canada' && (
+  <div><label className="label">PO Number</label><input className="input" placeholder="e.g. 10997280" value={form.po_number||''} onChange={e=>setForm(f=>({...f,po_number:e.target.value}))}/></div>
+)}
               <div><label className="label">Status</label><select className="input" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}><option value="pending">Pending</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div>
             </div>
             {form.type==='contract'&&!form.amount&&(()=>{const{sub,tps,tvq,total}=calcTotals();return(<div className="mt-4 rounded-xl p-3 text-xs space-y-1" style={{background:'var(--tn-warm)'}}><div className="flex justify-between" style={{color:'var(--tn-gold)'}}><span>Subtotal</span><span>{fmt(sub)}</span></div><div className="flex justify-between" style={{color:'var(--tn-gold)'}}><span>TPS 5%</span><span>{fmt(tps)}</span></div><div className="flex justify-between" style={{color:'var(--tn-gold)'}}><span>TVQ 9.975%</span><span>{fmt(tvq)}</span></div><div className="flex justify-between font-bold pt-1" style={{borderTop:'0.5px solid var(--tn-border)',color:'var(--tn-dark)'}}><span>Total</span><span>{fmt(total)}</span></div></div>);})()}
