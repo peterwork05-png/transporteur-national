@@ -107,12 +107,12 @@ export default function Login() {
   const [screen, setScreen] = useState('home');
 
   const enterAdmin = useCallback(() => {
-    login('admin', 'Admin');
+    login('admin', 'Admin', 'admin');
     navigate('/admin');
   }, [login, navigate]);
 
   const enterDriver = useCallback((driver) => {
-    login(driver.id, driver.name);
+    login(driver.id, driver.name, 'driver');
     const role = driver.role || 'local';
     if (role === 'local_route') {
       navigate(`/driver/dual/${driver.id}`);
