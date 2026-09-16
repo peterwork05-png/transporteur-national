@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
 import Login from './pages/Login';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminToday from './pages/admin/AdminToday';
@@ -17,13 +17,21 @@ import ClientPortal from './pages/client/ClientPortal';
 import TrackSearch from './pages/client/TrackSearch';
 import AdminLiveMap from './pages/admin/AdminLiveMap';
 
+function RequireAuth({ role, children }) {
+  const { user } = useApp();
+  if (!user) return <Navigate to="/" replace />;
+  if (role === 'admin' && user.role !== 'admin') return <Navigate to="/" replace />;
+  if (role === 'driver' && user.role !== 'driver') return <Navigate to="/" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AppProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<RequireAuth role="admin"><AdminLayout /></RequireAuth>}>
             <Route index element={<AdminToday />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="routes" element={<AdminRoutes />} />
@@ -34,10 +42,10 @@ export default function App() {
             <Route path="import" element={<AdminImport />} />
             <Route path="livemap" element={<AdminLiveMap />} />
           </Route>
-          <Route path="/driver/local/:driverId" element={<DriverLocal />} />
-          <Route path="/driver/dual/:driverId" element={<DriverDual />} />
-          <Route path="/driver/local" element={<DriverLocal />} />
-          <Route path="/driver/:route" element={<DriverRoute />} />
+          <Route path="/driver/local/:driverId" element={<RequireAuth role="driver"><DriverLocal /></RequireAuth>} />
+          <Route path="/driver/dual/:driverId" element={<RequireAuth role="driver"><DriverDual /></RequireAuth>} />
+          <Route path="/driver/local" element={<RequireAuth role="driver"><DriverLocal /></RequireAuth>} />
+          <Route path="/driver/:route" element={<RequireAuth role="driver"><DriverRoute /></RequireAuth>} />
           <Route path="/track" element={<TrackSearch />} />
           <Route path="/track/:orderId" element={<ClientTracking />} />
           <Route path="/portal" element={<ClientPortal />} />
@@ -47,5 +55,3 @@ export default function App() {
     </AppProvider>
   );
 }
-
-
