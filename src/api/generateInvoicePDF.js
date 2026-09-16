@@ -1,8 +1,13 @@
 const CLIENT_INFO = {
-  beg:     { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
-  beg_ops: { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
-  jonarts: { name: 'JONARTS PRINTING',     address: '9010 Ave du Parc\nMontréal, QC H2N 1Y8\n1(514) 738-8224 ext 122' },
-  aebath:  { name: 'A&E BATH AND SHOWER',  address: '' },
+  beg:            { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
+  beg_ops:        { name: 'BUREAU EN GROS #299',  address: '4141, aut. 440\nLaval, Québec H7P 4W6' },
+  jonarts:        { name: 'JONARTS PRINTING',      address: '9010 Ave du Parc\nMontréal, QC H2N 1Y8\n1(514) 738-8224 ext 122' },
+  aebath:         { name: 'A&E BATH AND SHOWER',   address: '' },
+  aebath_manual:  { name: 'A&E BATH AND SHOWER',   address: '' },
+  staples_canada: { name: 'STAPLES CANADA',        address: '' },
+  client_6229:    { name: 'STAPLES CANADA',        address: '' },
+  staples_022:    { name: 'STAPLES 022',            address: '' },
+  staples_034:    { name: 'STAPLES 034',            address: '' },
 };
 
 const ROUTE_LABELS = {
@@ -10,28 +15,32 @@ const ROUTE_LABELS = {
   quebec:  'Québec',
 };
 
-export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
-  const client = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
-  const dateFrom   = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
-  const dateTo     = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
-  const fmt        = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-  const isContract = invoice.type === 'contract';
+const VENDOR_NUMBER = '166301';
 
-  // Base rate for contract (without extras)
-  const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
-  const baseDays = parseFloat(invoice.days || 5);
-  const baseSubtotal = isContract ? baseRate * baseDays : 0;
-  const extrasTotal = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
+  const client      = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
+  const dateFrom    = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
+  const dateTo      = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
+  const fmt         = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+  const isContract  = invoice.type === 'contract';
+  const isStaples   = ['staples_canada','client_6229'].includes(clientGroup) || ['staples_canada','client_6229'].includes(invoice.client_id);
+  const poNumber    = invoice.po_number || '';
 
   // For local invoices, calculate totals from orders if not stored in DB
   let subtotal = parseFloat(invoice.subtotal || 0);
   if (!isContract && subtotal === 0 && orders && orders.length > 0) {
     subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
   }
+
+  // Base rate for contract (without extras)
+  const baseRate     = invoice.route === 'ontario' ? 749.99 : 585.00;
+  const baseDays     = parseFloat(invoice.days || 5);
+  const baseSubtotal = isContract ? baseRate * baseDays : 0;
+  const extrasTotal  = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
   if (isContract) subtotal = baseSubtotal + extrasTotal;
 
-  const tps   = isContract ? subtotal * 0.05  : subtotal * 0.05;
-  const tvq   = isContract ? subtotal * 0.09975 : subtotal * 0.09975;
+  const tps   = subtotal * 0.05;
+  const tvq   = subtotal * 0.09975;
   const total = subtotal + tps + tvq;
 
   // Extra fees rows
@@ -102,11 +111,24 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
 
   <div style="height:2px;background:#1A1208;margin-bottom:30px"></div>
 
-  <div style="margin-bottom:30px">
-    <div style="font-size:11px;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Facturer à / Bill To</div>
-    <div style="font-size:14px;font-weight:bold">${client.name}</div>
-    ${client.address ? `<div style="font-size:12px;color:#444;margin-top:4px;line-height:1.8;white-space:pre-line">${client.address}</div>` : ''}
-  </div>
+  <!-- Bill To + Vendor/PO section -->
+  <table width="100%" style="margin-bottom:30px">
+    <tr>
+      <td style="vertical-align:top">
+        <div style="font-size:11px;color:#8B6914;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Facturer à / Bill To</div>
+        <div style="font-size:14px;font-weight:bold">${client.name}</div>
+        ${client.address ? `<div style="font-size:12px;color:#444;margin-top:4px;line-height:1.8;white-space:pre-line">${client.address}</div>` : ''}
+      </td>
+      ${isStaples ? `
+      <td style="vertical-align:top;text-align:right">
+        <div style="font-size:12px;color:#444;line-height:2">
+          <div><span style="color:#8B6914;font-weight:bold">Vendor #:</span> ${VENDOR_NUMBER}</div>
+          ${poNumber ? `<div><span style="color:#8B6914;font-weight:bold">PO #:</span> ${poNumber}</div>` : ''}
+        </div>
+      </td>
+      ` : '<td></td>'}
+    </tr>
+  </table>
 
   <table width="100%" style="border-collapse:collapse;margin-bottom:30px">
     <thead>
