@@ -21,7 +21,8 @@ function RequireAuth({ role, children }) {
   const { user } = useApp();
   if (!user) return <Navigate to="/" replace />;
   if (role === 'admin' && user.role !== 'admin') return <Navigate to="/" replace />;
-  if (role === 'driver' && user.role !== 'driver') return <Navigate to="/" replace />;
+  if (role === 'driver' && user.role === 'admin') return <Navigate to="/" replace />;
+  if (role === 'driver' && !user.role) return <Navigate to="/" replace />;
   return children;
 }
 
