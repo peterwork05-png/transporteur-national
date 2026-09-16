@@ -112,7 +112,7 @@ export default function Login() {
   }, [login, navigate]);
 
   const enterDriver = useCallback((driver) => {
-    login(driver.id, driver.name, 'driver');
+    login('driver', driver.name);
     const role = driver.role || 'local';
     if (role === 'local_route') {
       navigate(`/driver/dual/${driver.id}`);
