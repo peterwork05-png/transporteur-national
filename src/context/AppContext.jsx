@@ -162,7 +162,7 @@ export function AppProvider({ children }) {
     const res = await fetch(`${API}/invoices`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+            body: JSON.stringify({
         id:        inv.id || undefined,
         type:      inv.type,
         client_id: inv.client || null,
@@ -174,6 +174,7 @@ export function AppProvider({ children }) {
         tps:       (subtotal * 0.05).toFixed(2),
         tvq:       (subtotal * 0.09975).toFixed(2),
         total:     amount.toFixed(2),
+        po_number: inv.po_number || null,
       }),
     });
     const saved = await res.json();
