@@ -588,6 +588,9 @@ router.get('/stats/today', async (req, res) => {
 // ── GPS LOCATION ─────────────────────────────────────────
 
 router.post('/drivers/:id/location', async (req, res) => {
+  // Only save location if driver is on duty
+const { rows: dutyCheck } = await pool.query('SELECT on_duty FROM drivers WHERE id = $1', [req.params.id]);
+if (!dutyCheck[0]?.on_duty) return res.json({ success: false, reason: 'off_duty' });
   try {
     const { lat, lng } = req.body;
     await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS last_lat FLOAT`);
@@ -1613,6 +1616,39 @@ router.patch('/invoices/:id/po-number', async (req, res) => {
     const { po_number } = req.body;
     await pool.query(`UPDATE invoices SET po_number = $1 WHERE id = $2`, [po_number || null, req.params.id]);
     res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+// Clock in
+router.post('/drivers/:id/clock-in', async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE drivers SET on_duty = true, clocked_in_at = NOW(), clocked_out_at = NULL WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Clock out
+router.post('/drivers/:id/clock-out', async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE drivers SET on_duty = false, clocked_out_at = NOW(), lat = NULL, lng = NULL, location_updated_at = NULL WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get driver duty status
+router.get('/drivers/:id/duty-status', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT on_duty, clocked_in_at, clocked_out_at FROM drivers WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Driver not found' });
+    res.json(rows[0]);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 export default router;
