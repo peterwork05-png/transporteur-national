@@ -1,199 +1,197 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 
-const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+function loadMapbox() {
+  return new Promise((resolve) => {
+    if (window.mapboxgl) { resolve(window.mapboxgl); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+    script.onload = () => resolve(window.mapboxgl);
+    document.head.appendChild(script);
+  });
+}
 
-const DRIVER_COLORS = {
-  local:   '#C0392B',
-  ontario: '#8B4513',
-  quebec:  '#0F6E56',
-};
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export default function AdminLiveMap() {
-  const { orders, drivers } = useApp();
+  const { drivers } = useApp();
   const mapRef      = useRef(null);
-  const mapObj      = useRef(null);
+  const mapInstance = useRef(null);
   const markersRef  = useRef({});
-  const [mapReady,  setMapReady]  = useState(false);
-  const [locations, setLocations] = useState({});
-  const [selected,  setSelected]  = useState(null);
-  const [lastUpdate,setLastUpdate]= useState(null);
+  const [driverStatuses, setDriverStatuses] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  const todayOrders = orders.filter(o => {
-    const d = o.date?.split('T')[0];
-    return d === new Date().toISOString().split('T')[0];
-  });
+  const fetchAllLocations = useCallback(async () => {
+    if (!drivers?.length) return;
+    const statuses = {};
+    await Promise.all(drivers.map(async (driver) => {
+      try {
+        const [locRes, driverRes] = await Promise.all([
+          fetch(`/api/drivers/${driver.id}/location`),
+          fetch(`/api/drivers/${driver.id}/duty-status`),
+        ]);
+        const loc   = await locRes.json();
+        const duty  = await driverRes.json();
+        statuses[driver.id] = {
+          ...driver,
+          lat:          loc.lat,
+          lng:          loc.lng,
+          updated_at:   loc.location_updated_at,
+          on_duty:      duty.on_duty || false,
+          clocked_in_at: duty.clocked_in_at,
+        };
+      } catch(e) {
+        statuses[driver.id] = { ...driver, lat: null, lng: null, on_duty: false };
+      }
+    }));
+    setDriverStatuses(statuses);
+    setLastUpdated(new Date().toLocaleTimeString());
+    setLoading(false);
 
-  const activeDrivers = drivers.filter(d =>
-    todayOrders.some(o => (o.driver_id === d.id || o.driver === d.id) && ['picked','enroute'].includes(o.status))
-  );
+    // Update map markers
+    if (!mapInstance.current) return;
+    const mapboxgl = await loadMapbox();
 
-  // Fetch all driver locations
-  const fetchLocations = async () => {
-    const locs = {};
-    await Promise.all(
-      drivers.map(async d => {
-        try {
-          const res  = await fetch(`/api/drivers/${d.id}/location`);
-          const data = await res.json();
-          if (data.lat && data.lng) locs[d.id] = { lat: data.lat, lng: data.lng, updatedAt: data.location_updated_at };
-        } catch(e) {}
-      })
-    );
-    setLocations(locs);
-    setLastUpdate(new Date());
-  };
-
-  useEffect(() => {
-    fetchLocations();
-    const iv = setInterval(fetchLocations, 15000);
-    return () => clearInterval(iv);
-  }, [drivers]);
-
-  // Init map
-  useEffect(() => {
-    if (mapObj.current || !mapRef.current) return;
-
-    if (!document.querySelector('link[href*="mapbox-gl"]')) {
-      const link = document.createElement('link');
-      link.rel  = 'stylesheet';
-      link.href = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css';
-      document.head.appendChild(link);
-    }
-
-    const init = () => {
-      if (!window.mapboxgl || !mapRef.current) return;
-      window.mapboxgl.accessToken = TOKEN;
-      const map = new window.mapboxgl.Map({
-        container: mapRef.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [-73.5674, 45.5017], // Montreal/Laval area
-        zoom: 10,
-      });
-      map.addControl(new window.mapboxgl.NavigationControl(), 'top-right');
-      mapObj.current = map;
-      setMapReady(true);
-    };
-
-    if (window.mapboxgl) { init(); }
-    else {
-      const script = document.createElement('script');
-      script.src   = 'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js';
-      script.onload = init;
-      document.head.appendChild(script);
-    }
-  }, [mapRef.current]);
-
-  // Update driver markers on map
-  useEffect(() => {
-    if (!mapReady || !mapObj.current || !window.mapboxgl) return;
-
-    // Remove old markers
-    Object.values(markersRef.current).forEach(m => m.remove());
-    markersRef.current = {};
-
-    // Add driver markers
-    drivers.forEach(driver => {
-      const loc = locations[driver.id];
-      if (!loc) return;
-
-      const driverOrders = todayOrders.filter(o => (o.driver_id === driver.id || o.driver === driver.id) && o.status === 'enroute');
-      const isActive = driverOrders.length > 0;
+    Object.values(statuses).forEach(driver => {
+      if (!driver.lat || !driver.lng || !driver.on_duty) {
+        // Remove marker if off duty or no location
+        if (markersRef.current[driver.id]) {
+          markersRef.current[driver.id].remove();
+          delete markersRef.current[driver.id];
+        }
+        return;
+      }
 
       const el = document.createElement('div');
       el.style.cssText = `
-        width: 40px; height: 40px; border-radius: 50%;
+        width: 36px; height: 36px; border-radius: 50%;
         background: ${driver.color || '#C0392B'};
-        border: 3px solid white;
+        border: 2px solid white;
         display: flex; align-items: center; justify-content: center;
-        color: white; font-weight: bold; font-size: 12px;
-        cursor: pointer;
+        color: white; font-size: 12px; font-weight: bold;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        ${isActive ? 'animation: pulse 2s infinite;' : ''}
+        cursor: pointer;
       `;
-      el.textContent = driver.initials || '?';
-      el.onclick = () => setSelected(driver.id === selected ? null : driver.id);
+      el.textContent = driver.initials || driver.name?.substring(0,2).toUpperCase() || '?';
 
-      const popup = new window.mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(`
-        <div style="font-family:sans-serif;padding:6px 2px;min-width:160px">
-          <p style="font-weight:700;margin:0;font-size:13px">${driver.name}</p>
-          <p style="color:#666;font-size:11px;margin:3px 0 0">${isActive ? '🚚 En route' : '📍 On duty'}</p>
-          ${driverOrders[0] ? `<p style="font-size:11px;margin:3px 0 0;color:#333">→ ${driverOrders[0].address}</p>` : ''}
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(`
+        <div style="font-family:Arial;padding:8px;min-width:140px">
+          <p style="font-weight:bold;margin:0 0 4px">${driver.name}</p>
+          <p style="color:#0F6E56;font-size:11px;margin:0">🟢 On duty</p>
+          ${driver.clocked_in_at ? `<p style="color:#666;font-size:11px;margin:2px 0">Since ${new Date(driver.clocked_in_at).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:true})}</p>` : ''}
+          ${driver.updated_at ? `<p style="color:#666;font-size:11px;margin:0">GPS: ${new Date(driver.updated_at).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:true})}</p>` : ''}
         </div>
       `);
 
-      markersRef.current[driver.id] = new window.mapboxgl.Marker({ element: el })
-        .setLngLat([loc.lng, loc.lat])
-        .setPopup(popup)
-        .addTo(mapObj.current);
+      if (markersRef.current[driver.id]) {
+        markersRef.current[driver.id].setLngLat([driver.lng, driver.lat]);
+      } else {
+        markersRef.current[driver.id] = new mapboxgl.Marker({ element: el })
+          .setLngLat([driver.lng, driver.lat])
+          .setPopup(popup)
+          .addTo(mapInstance.current);
+      }
     });
+  }, [drivers]);
 
-    // Fit map to show all drivers
-    const locs = Object.values(locations);
-    if (locs.length > 1) {
-      const bounds = new window.mapboxgl.LngLatBounds();
-      locs.forEach(l => bounds.extend([l.lng, l.lat]));
-      mapObj.current.fitBounds(bounds, { padding: 80, maxZoom: 14 });
-    } else if (locs.length === 1) {
-      mapObj.current.flyTo({ center: [locs[0].lng, locs[0].lat], zoom: 13 });
+  useEffect(() => {
+    const initMap = async () => {
+      const mapboxgl = await loadMapbox();
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      const map = new mapboxgl.Map({
+        container: mapRef.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-73.5673, 45.5017],
+        zoom: 10,
+      });
+      map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      mapInstance.current = map;
+      map.on('load', fetchAllLocations);
+    };
+    initMap();
+    return () => { if (mapInstance.current) mapInstance.current.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      const interval = setInterval(fetchAllLocations, 30000);
+      return () => clearInterval(interval);
     }
-  }, [locations, mapReady, drivers]);
+  }, [loading, fetchAllLocations]);
 
-  const fmt = d => d ? new Date(d).toLocaleTimeString('en-CA', { hour:'2-digit', minute:'2-digit', hour12:true }) : '—';
+  useEffect(() => {
+    if (drivers?.length && !loading) fetchAllLocations();
+  }, [drivers]);
+
+  const onDutyDrivers  = Object.values(driverStatuses).filter(d => d.on_duty);
+  const offDutyDrivers = Object.values(driverStatuses).filter(d => !d.on_duty);
 
   return (
-    <div className="flex flex-col" style={{height:'calc(100vh - 56px)'}}>
-      {/* Top bar */}
-      <div className="flex-shrink-0 px-4 py-3 flex items-center justify-between" style={{background:'white',borderBottom:'0.5px solid var(--tn-border)'}}>
-        <div>
-          <h1 className="text-lg font-semibold" style={{color:'var(--tn-dark)'}}>Live driver map</h1>
-          <p className="text-xs" style={{color:'var(--tn-gold)'}}>
-            {activeDrivers.length} driver{activeDrivers.length !== 1 ? 's' : ''} active · Updates every 15s
-            {lastUpdate && ` · Last: ${fmt(lastUpdate)}`}
-          </p>
+    <div className="flex flex-col h-full" style={{minHeight:'calc(100vh - 60px)'}}>
+      <div className="p-4 pb-2">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h1 className="text-xl font-semibold" style={{color:'var(--tn-dark)'}}>Live Map</h1>
+            {lastUpdated && <p className="text-xs mt-0.5" style={{color:'var(--tn-gold)'}}>Updated {lastUpdated}</p>}
+          </div>
+          <button onClick={fetchAllLocations} className="btn btn-outline btn-sm">↻ Refresh</button>
         </div>
-        <button onClick={fetchLocations} className="btn btn-outline btn-sm">↻ Refresh</button>
-      </div>
 
-      {/* Driver legend */}
-      <div className="flex-shrink-0 px-4 py-2 flex gap-3 overflow-x-auto" style={{background:'var(--tn-warm)',borderBottom:'0.5px solid var(--tn-border)'}}>
-        {drivers.map(driver => {
-          const loc = locations[driver.id];
-          const driverOrders = todayOrders.filter(o => (o.driver_id===driver.id||o.driver===driver.id) && ['picked','enroute'].includes(o.status));
-          return (
-            <div key={driver.id}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl flex-shrink-0 cursor-pointer transition-all"
-              style={{background:selected===driver.id?driver.color:'white', border:`1px solid ${driver.color}`}}
-              onClick={() => {
-                setSelected(driver.id === selected ? null : driver.id);
-                if (loc && mapObj.current) mapObj.current.flyTo({ center:[loc.lng,loc.lat], zoom:14 });
-              }}>
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{background:driver.color}}>
-                {driver.initials}
+        {/* Driver status cards */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {/* On duty */}
+          <div className="card p-3">
+            <p className="text-xs font-medium mb-2" style={{color:'#0F6E56'}}>🟢 On duty ({onDutyDrivers.length})</p>
+            {onDutyDrivers.length === 0 ? (
+              <p className="text-xs" style={{color:'var(--tn-gold)'}}>No drivers on duty</p>
+            ) : onDutyDrivers.map(driver => (
+              <div key={driver.id} className="flex items-center gap-2 mb-1.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{background: driver.color || 'var(--tn-red)'}}>
+                  {driver.initials || driver.name?.substring(0,2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">{driver.name}</p>
+                  {driver.clocked_in_at && (
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>
+                      Since {new Date(driver.clocked_in_at).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:true})}
+                    </p>
+                  )}
+                  {driver.lat ? (
+                    <p className="text-xs" style={{color:'#0F6E56'}}>📍 GPS active</p>
+                  ) : (
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>No GPS yet</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-medium" style={{color:selected===driver.id?'white':'var(--tn-dark)'}}>{driver.name}</p>
-                <p className="text-xs" style={{color:selected===driver.id?'rgba(255,255,255,0.7)':'var(--tn-gold)'}}>
-                  {loc ? (driverOrders.length>0?'🟢 En route':'🟡 On duty') : '⚪ No GPS'}
-                </p>
+            ))}
+          </div>
+
+          {/* Off duty */}
+          <div className="card p-3">
+            <p className="text-xs font-medium mb-2" style={{color:'rgba(26,18,8,0.4)'}}>⚫ Off duty ({offDutyDrivers.length})</p>
+            {offDutyDrivers.length === 0 ? (
+              <p className="text-xs" style={{color:'var(--tn-gold)'}}>All drivers on duty</p>
+            ) : offDutyDrivers.map(driver => (
+              <div key={driver.id} className="flex items-center gap-2 mb-1.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{background: 'rgba(26,18,8,0.2)'}}>
+                  {driver.initials || driver.name?.substring(0,2).toUpperCase()}
+                </div>
+                <p className="text-xs truncate" style={{color:'rgba(26,18,8,0.4)'}}>{driver.name}</p>
               </div>
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Map */}
-      <div ref={mapRef} style={{flex:1}} />
-
-      {/* No GPS message */}
-      {Object.keys(locations).length === 0 && (
-        <div style={{position:'absolute',bottom:'80px',left:'50%',transform:'translateX(-50%)',zIndex:10}}>
-          <div className="px-4 py-2 rounded-xl text-sm" style={{background:'rgba(26,18,8,0.8)',color:'white'}}>
-            📍 Waiting for driver GPS — drivers share location when En route
-          </div>
-        </div>
-      )}
+      <div ref={mapRef} style={{flex:1, minHeight:'400px'}} />
     </div>
   );
 }
