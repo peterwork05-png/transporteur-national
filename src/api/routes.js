@@ -1633,7 +1633,7 @@ router.post('/drivers/:id/clock-in', async (req, res) => {
 router.post('/drivers/:id/clock-out', async (req, res) => {
   try {
     await pool.query(
-      `UPDATE drivers SET on_duty = false, clocked_out_at = NOW(), lat = NULL, lng = NULL, location_updated_at = NULL WHERE id = $1`,
+      `UPDATE drivers SET on_duty = false, clocked_out_at = NOW(), last_lat = NULL, last_lng = NULL, location_updated_at = NULL WHERE id = $1`,
       [req.params.id]
     );
     res.json({ success: true });
