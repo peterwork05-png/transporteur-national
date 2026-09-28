@@ -1932,7 +1932,9 @@ router.get('/client/orders', async (req, res) => {
       FROM orders o
       LEFT JOIN drivers d ON o.driver_id = d.id
       LEFT JOIN clients c ON o.client_id = c.id
-      WHERE c.client_group = $1 ${dateFilter}
+      WHERE (c.client_group = $1 OR LOWER(o.billing_email) IN (
+  SELECT LOWER(email) FROM clients WHERE client_group = $1
+)) ${dateFilter}
       ORDER BY o.date DESC, o.created_at DESC
     `, [client_group]);
     res.json(rows);
