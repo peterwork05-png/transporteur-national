@@ -344,7 +344,7 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
       if (rows.length > 0) clientId = rows[0].id;
     }
     if (!clientId && billingEmail) {
-      const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [billingEmail]);
+      const { rows } = await pool.query('SELECT id FROM clients WHERE LOWER(email) = LOWER($1)', [billingEmail]);
       if (rows.length > 0) clientId = rows[0].id;
     }
 
@@ -1801,7 +1801,7 @@ router.post('/import/woocommerce', async (req, res) => {
           if (rows.length > 0) clientId = rows[0].id;
         }
         if (!clientId && billingEmail) {
-          const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [billingEmail]);
+          const { rows } = await pool.query('SELECT id FROM clients WHERE LOWER(email) = LOWER($1)', [billingEmail]);
           if (rows.length > 0) clientId = rows[0].id;
         }
         if (!clientId) {
