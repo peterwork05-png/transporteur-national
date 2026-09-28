@@ -30,8 +30,7 @@ export const QUEBEC_STOPS = [
   { num: '221', name: 'Staples #221', addr: '1510 Avenue Jules-Verne, Québec' },
   { num: '173', name: 'Staples #173', addr: '400 Rue Barkoff, Trois-Rivières' },
   { num: '42',  name: 'Staples #42',  addr: '4000 Boulevard des Récollets, Trois-Rivières' },
-  { num: 'TBD', name: 'Staples — TBD', addr: '565 Bd Saint-Joseph, Drummondville, QC' },
-];
+{ name: 'Staples #139', addr: '565 Bd Saint-Joseph, Drummondville, QC' }];
 
 export const CONTRACT_RATES = { ontario: 749.99, quebec: 585.00 };
 export const TPS = 0.05;
