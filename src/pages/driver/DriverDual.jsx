@@ -376,6 +376,23 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 function RouteTab({ driverId, route }) {
   const routeKey = driverId === 'pierre' ? 'quebec' : 'ontario';
   const stops    = routeKey === 'ontario' ? ONTARIO_STOPS : QUEBEC_STOPS;
+  const locationInterval = useRef(null);
+
+  // GPS sharing — starts when route tab mounts, stops when it unmounts
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const send = () => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        fetch(`/api/drivers/${driverId}/location`, {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        }).catch(() => {});
+      }, () => {}, { enableHighAccuracy: true });
+    };
+    send();
+    locationInterval.current = setInterval(send, 30000);
+    return () => { if (locationInterval.current) clearInterval(locationInterval.current); };
+  }, [driverId]);
 
   const today = new Date().toISOString().split('T')[0];
   const STORAGE_KEY = `route_${routeKey}_date`;
