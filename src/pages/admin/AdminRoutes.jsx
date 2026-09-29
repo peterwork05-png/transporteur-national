@@ -31,8 +31,8 @@ export default function AdminRoutes() {
   };
 
   const renderRoute = (title, routeName, driver, route, stops, accentColor) => {
-    const delivered  = route.stopStatus.filter(s => s === 'delivered').length;
-    const skipped    = route.stopStatus.filter(s => s === 'skipped').length;
+    const delivered  = route.stopStatus.filter(s => s === 'delivered' || s === 'done').length;
+const skipped    = route.stopStatus.filter(s => s === 'skipped').length;
     const pct        = Math.round(((delivered + skipped) / stops.length) * 100);
     const currentIdx = route.stopStatus.findIndex(s => s === null);
 
@@ -102,10 +102,10 @@ export default function AdminRoutes() {
                 style={{background:isActive?'rgba(24,95,165,0.06)':'transparent', borderBottom:'0.5px solid var(--tn-border)'}}>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 font-medium"
                   style={{
-                    background: status==='delivered'?'#E8F5EF':status==='skipped'?'#FEE2E2':isActive?'rgba(24,95,165,0.12)':'var(--tn-warm)',
-                    color:      status==='delivered'?'#0F6E56':status==='skipped'?'#991B1B':isActive?'#185FA5':'var(--tn-gold)',
+                    background: (status==='delivered'||status==='done')?'#E8F5EF':status==='skipped'?'#FEE2E2':isActive?'rgba(24,95,165,0.12)':'var(--tn-warm)',
+color:      (status==='delivered'||status==='done')?'#0F6E56':status==='skipped'?'#991B1B':isActive?'#185FA5':'var(--tn-gold)',
                   }}>
-                  {status==='delivered'?'✓':status==='skipped'?'✕':isActive?'→':i+1}
+                  {(status==='delivered'||status==='done')?'✓':status==='skipped'?'✕':isActive?'→':i+1}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate"
@@ -118,7 +118,7 @@ export default function AdminRoutes() {
                 {status && (
                   <span className={`badge flex-shrink-0 ${status==='delivered'?'badge-success':status==='skipped'?'badge-danger':'badge-info'}`}
                     style={{fontSize:'10px'}}>
-                    {status==='delivered'?'Done':status==='skipped'?'Skipped':'Active'}
+                    {(status==='delivered'||status==='done')?'Done':status==='skipped'?'Skipped':'Active'}
                   </span>
                 )}
               </div>
