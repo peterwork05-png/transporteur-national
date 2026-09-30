@@ -230,7 +230,8 @@ try {
 // Create order
 router.post('/orders', async (req, res) => {
   try {
-    const { id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone } = req.body;
+    const { client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone } = req.body;
+const id = req.body.id || `DEL-${new Date().getFullYear()}-MANUAL-${Date.now()}`;
     const { rows } = await pool.query(`
       INSERT INTO orders (id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
