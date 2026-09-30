@@ -326,7 +326,7 @@ export default function ClientPortal() {
                               🗺️ Track live
                             </button>
                           )}
-                          {order.status === 'delivered' && order.photo_url && (
+                          {order.status === 'delivered' && (
                             <a href={`/api/orders/${order.id}/proof-pdf`} target="_blank" rel="noreferrer"
                               onClick={e=>e.stopPropagation()}
                               className="btn btn-sm text-xs" style={{background:'#0F6E56',color:'white'}}>
@@ -432,8 +432,8 @@ export default function ClientPortal() {
                       <img src={selected.photo_url} alt="Proof" className="w-full rounded-xl object-cover" style={{maxHeight:'200px'}}/>
                     </div>
                   )}
-                  {selected.photo_url && (
-                    <a href={`/api/orders/${selected.id}/proof-pdf`} target="_blank" rel="noreferrer"
+                  {(
+  <a href={`/api/orders/${selected.id}/proof-pdf`} target="_blank" rel="noreferrer"
                       className="btn w-full justify-center text-sm" style={{background:'#0F6E56',color:'white'}}>
                       ⬇ Download proof of delivery
                     </a>
