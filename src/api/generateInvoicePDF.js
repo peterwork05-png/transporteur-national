@@ -66,7 +66,7 @@ if (isContract) {
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${invoice.route === 'UAP St-Sauveur' ? `Service de livraison — ${baseDays} jours × 9h × $24/h` : `Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days`}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${baseDays}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(baseSubtotal)}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(subtotal - extrasTotal)}</td>
     </tr>
     ${extrasRows}
   ` : (orders || []).map(o => `
