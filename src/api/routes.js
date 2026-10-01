@@ -337,9 +337,9 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
       'accounting@jonarts.com':       'jonarts_finance',
       'aebath@gmail.com':             'aebath',
     };
-    if (order.billing_email && EMAIL_CLIENT_MAP[order.billing_email.toLowerCase()]) {
-      clientId = EMAIL_CLIENT_MAP[order.billing_email.toLowerCase()];
-    }
+    if (billingEmail && EMAIL_CLIENT_MAP[billingEmail.toLowerCase()]) {
+  clientId = EMAIL_CLIENT_MAP[billingEmail.toLowerCase()];
+}
 
     if (!clientId && order.store_number) {
       const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${storeNumber}%`]);
