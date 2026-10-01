@@ -81,3 +81,40 @@ export function getInvoicePeriods(date = new Date()) {
     },
   };
 }
+export async function generateUAPInvoice(dateFrom, dateTo) {
+  try {
+    const HOURLY_RATE = 24;
+    const HOURS_PER_DAY = 9; // Change to 8 if break is unpaid
+
+    // Count working days (Mon-Fri) in the period
+    const start = new Date(dateFrom);
+    const end   = new Date(dateTo);
+    let workDays = 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const day = d.getDay();
+      if (day >= 1 && day <= 5) workDays++;
+    }
+
+    const subtotal = workDays * HOURS_PER_DAY * HOURLY_RATE;
+    const tps      = subtotal * TPS;
+    const tvq      = subtotal * TVQ;
+    const total    = subtotal + tps + tvq;
+
+    const { rows: lastInv } = await pool.query(`SELECT MAX(id) as last_id FROM invoices`);
+    const nextId = (parseInt(lastInv[0].last_id) || 599) + 1;
+
+    const { rows: inv } = await pool.query(`
+      INSERT INTO invoices (id, client_id, type, route, date_from, date_to, days, subtotal, tps, tvq, total, status)
+      VALUES ($1, 'uap', 'contract', 'UAP St-Sauveur', $2, $3, $4, $5, $6, $7, $8, 'pending')
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id
+    `, [nextId, dateFrom, dateTo, workDays,
+        subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2)]);
+
+    console.log(`✅ UAP Invoice #${nextId}: ${workDays} days × ${HOURS_PER_DAY}h × $${HOURLY_RATE} = $${total.toFixed(2)}`);
+    return { success: true, invoiceId: nextId, workDays, subtotal, total };
+  } catch(err) {
+    console.error('UAP invoice error:', err);
+    return { success: false, error: err.message };
+  }
+}
