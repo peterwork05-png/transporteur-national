@@ -43,6 +43,16 @@ export function startScheduler() {
         console.log(`✅ Contract invoices: ${results.invoices?.length || 0} created`);
       } catch(err) { console.error('❌ Contract invoice error:', err.message); }
     }
+        // UAP invoice — every Friday at noon ET
+    if (etDay === 5 && etHour === 12 && isTopOfHour) {
+      const { generateUAPInvoice } = await import('./autoInvoice.js');
+      const { from, to } = getPreviousWeekDates(now);
+      console.log(`📄 Auto UAP invoice triggered for ${from} – ${to}`);
+      try {
+        const result = await generateUAPInvoice(from, to);
+        console.log(`✅ UAP invoice #${result.invoiceId}: $${result.total?.toFixed(2)}`);
+      } catch(err) { console.error('❌ UAP invoice error:', err.message); }
+    }
 
   }, 5 * 60 * 1000);
 }
