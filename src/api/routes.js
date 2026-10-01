@@ -893,6 +893,14 @@ router.post('/invoices/generate-local', async (req, res) => {
     res.json(results);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
+router.post('/invoices/generate-uap', async (req, res) => {
+  try {
+    const { dateFrom, dateTo } = req.body;
+    const { generateUAPInvoice } = await import('./autoInvoice.js');
+    const result = await generateUAPInvoice(dateFrom, dateTo);
+    res.json(result);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
 
 // Add Elaine to BEG
 router.post('/setup/add-elaine', async (req, res) => {
