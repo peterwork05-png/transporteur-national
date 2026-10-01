@@ -8,6 +8,7 @@ const CLIENT_INFO = {
   client_6229:    { name: 'STAPLES CANADA',        address: '' },
   staples_022:    { name: 'STAPLES 022',            address: '' },
   staples_034:    { name: 'STAPLES 034',            address: '' },
+  uap: { name: 'UAP INC. (NAPA CANADA)', address: '390 rue Principale\nSaint-Sauveur, Québec J0R 1R0' },
 };
 
 const ROUTE_LABELS = {
@@ -37,7 +38,14 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
   const baseDays     = parseFloat(invoice.days || 5);
   const baseSubtotal = isContract ? baseRate * baseDays : 0;
   const extrasTotal  = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-  if (isContract) subtotal = baseSubtotal + extrasTotal;
+if (isContract) {
+  if (clientGroup === 'uap' || invoice.client_id === 'uap') {
+    subtotal = parseFloat(invoice.subtotal || 0) + extrasTotal;
+  } else {
+    const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
+    subtotal = (baseRate * baseDays) + extrasTotal;
+  }
+}
 
   const tps   = subtotal * 0.05;
   const tvq   = subtotal * 0.09975;
@@ -56,7 +64,7 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
   const tableRows = isContract ? `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${invoice.route === 'UAP St-Sauveur' ? `Service de livraison — ${baseDays} jours × 9h × $24/h` : `Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days`}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${baseDays}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(baseSubtotal)}</td>
     </tr>
