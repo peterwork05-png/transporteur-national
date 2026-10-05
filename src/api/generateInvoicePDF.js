@@ -8,7 +8,7 @@ const CLIENT_INFO = {
   client_6229:    { name: 'STAPLES CANADA',        address: '' },
   staples_022:    { name: 'STAPLES 022',            address: '' },
   staples_034:    { name: 'STAPLES 034',            address: '' },
-  uap: { name: 'UAP INC. (NAPA CANADA)', address: '390 rue Principale\nSaint-Sauveur, Québec J0R 1R0' },
+  uap:            { name: 'UAP INC. (NAPA CANADA)', address: '390 rue Principale\nSaint-Sauveur, Québec J0R 1R0' },
 };
 
 const ROUTE_LABELS = {
@@ -18,14 +18,15 @@ const ROUTE_LABELS = {
 
 const VENDOR_NUMBER = '166301';
 
-export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
+export function generateInvoiceHTML(invoice, orders, clientGroup, extras = [], extraPoNumber = null) {
   const client      = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
   const dateFrom    = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
   const dateTo      = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
   const fmt         = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const isContract  = invoice.type === 'contract';
+  const isUAP       = clientGroup === 'uap' || invoice.client_id === 'uap';
   const isStaples   = ['staples_canada','client_6229'].includes(clientGroup) || ['staples_canada','client_6229'].includes(invoice.client_id);
-  const poNumber    = invoice.po_number || '';
+  const poNumber    = extraPoNumber || invoice.po_number || '';
 
   // For local invoices, calculate totals from orders if not stored in DB
   let subtotal = parseFloat(invoice.subtotal || 0);
@@ -33,25 +34,27 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = []) {
     subtotal = orders.reduce((sum, o) => sum + parseFloat(o.amount || 0), 0);
   }
 
-  // Base rate for contract (without extras)
-  const baseRate     = invoice.route === 'ontario' ? 749.99 : 585.00;
-  const baseDays     = parseFloat(invoice.days || 5);
-  const baseSubtotal = isContract ? baseRate * baseDays : 0;
-  const extrasTotal  = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-if (isContract) {
-  if (clientGroup === 'uap' || invoice.client_id === 'uap') {
-    subtotal = parseFloat(invoice.subtotal || 0) + extrasTotal;
-  } else {
-    const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
-    subtotal = (baseRate * baseDays) + extrasTotal;
+  const baseDays    = parseFloat(invoice.days || 5);
+  const extrasTotal = (extras || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+
+  if (isContract) {
+    if (isUAP) {
+      // UAP: use stored subtotal from DB
+      subtotal = parseFloat(invoice.subtotal || 0) + extrasTotal;
+    } else {
+      // Staples: use hardcoded daily rates
+      const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
+      subtotal = (baseRate * baseDays) + extrasTotal;
+    }
   }
-}
 
   const tps   = subtotal * 0.05;
   const tvq   = subtotal * 0.09975;
   const total = subtotal + tps + tvq;
 
-  // Extra fees rows
+  // Calculate hours for UAP display
+  const uapHours = isUAP ? ((subtotal - extrasTotal) / 24).toFixed(2) : null;
+
   const extrasRows = (extras || []).map(e => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">—</td>
@@ -64,9 +67,14 @@ if (isContract) {
   const tableRows = isContract ? `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${dateFrom} – ${dateTo}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">${invoice.route === 'UAP St-Sauveur' ? `Service de livraison — ${baseDays} jours × 9h × $24/h` : `Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days`}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${baseDays}</td>
-     <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(subtotal - extrasTotal)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px">
+        ${isUAP
+          ? `Service de livraison — ${uapHours}h × $24/h (${baseDays} jour${baseDays>1?'s':''})`
+          : `Route ${ROUTE_LABELS[invoice.route] || invoice.route} — ${baseDays} jours / days`
+        }
+      </td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:center">${isUAP ? uapHours+'h' : baseDays}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0ebe0;font-size:12px;text-align:right">${fmt(subtotal - extrasTotal)}</td>
     </tr>
     ${extrasRows}
   ` : (orders || []).map(o => `
@@ -78,7 +86,7 @@ if (isContract) {
     </tr>
   `).join('');
 
-  const colHeader = isContract ? 'Jours / Days' : 'Boîtes';
+  const colHeader = isContract ? (isUAP ? 'Heures' : 'Jours / Days') : 'Boîtes';
 
   return `<!DOCTYPE html>
 <html>
@@ -110,7 +118,8 @@ if (isContract) {
         <div style="font-size:22px;font-weight:bold;color:#C0392B">FACTURE</div>
         <div style="font-size:14px;font-weight:bold;margin-top:8px">No. ${invoice.id}</div>
         <div style="font-size:12px;color:#666;margin-top:4px">${dateFrom} – ${dateTo}</div>
-        ${isContract ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">Route ${ROUTE_LABELS[invoice.route] || invoice.route}</div>` : ''}
+        ${isContract && !isUAP ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">Route ${ROUTE_LABELS[invoice.route] || invoice.route}</div>` : ''}
+        ${isUAP ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">UAP St-Sauveur</div>` : ''}
         <div style="font-size:11px;color:#666;margin-top:4px">TPS: 784789315RT0001</div>
         <div style="font-size:11px;color:#666">TVQ: 1224260784TQ0001</div>
       </td>
@@ -119,7 +128,6 @@ if (isContract) {
 
   <div style="height:2px;background:#1A1208;margin-bottom:30px"></div>
 
-  <!-- Bill To + Vendor/PO section -->
   <table width="100%" style="margin-bottom:30px">
     <tr>
       <td style="vertical-align:top">
