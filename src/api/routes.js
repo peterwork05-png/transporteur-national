@@ -337,8 +337,13 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
       'accounting@jonarts.com':       'jonarts_finance',
       'aebath@gmail.com':             'aebath',
     };
-    if (billingEmail && EMAIL_CLIENT_MAP[billingEmail.toLowerCase()]) {
-  clientId = EMAIL_CLIENT_MAP[billingEmail.toLowerCase()];
+   if (billingEmail && EMAIL_CLIENT_MAP[billingEmail.toLowerCase()]) {
+  const mappedId = EMAIL_CLIENT_MAP[billingEmail.toLowerCase()];
+  // Verify the client exists before assigning
+  const { rows: clientCheck } = await pool.query('SELECT id FROM clients WHERE id = $1', [mappedId]);
+  if (clientCheck.length > 0) {
+    clientId = mappedId;
+  }
 }
 
     if (!clientId && order.store_number) {
