@@ -475,7 +475,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
               {/* Info grid with clickable client */}
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  {label:'Client', val:getClientName(selected), clickable:true},
+                  {label:'Client ✏️', val:getClientName(selected), clickable:'client'},
                   {label:'Type', val:selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
                   {label:'Period', val:`${String(selected.date_from||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
           selected.client_id === 'staples_canada' || selected.client_id === 'client_6229' ? {label:'PO Number ✏️', val: selected.po_number || 'Not set', clickable: 'po'} : null,
@@ -484,7 +484,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
                 ].filter(Boolean).filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)',cursor:item.clickable?'pointer':'default'}}
                     onClick={item.clickable==='client'?()=>{fetchAllClients();setShowClientSelect(true);}:item.clickable==='po'?()=>{setEditPO(selected.po_number||'');setShowEditPO(true);}:item.clickable==='billto'?()=>{setEditBillToStore(selected.bill_to_name||'');setEditBillToName(selected.bill_to_name||'');setEditBillToAddress(selected.bill_to_address||'');setShowEditBillTo(true);}:undefined}>
-                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label} {item.clickable&&<span style={{color:'var(--tn-red)'}}>✏️</span>}</p>
+                    <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label}</p>
                     <p className="font-semibold text-sm mt-0.5">{item.val}</p>
                   </div>
                 ))}
