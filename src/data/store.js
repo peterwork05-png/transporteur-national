@@ -3,7 +3,11 @@ export const CLIENTS = {
   beg: { id: 'beg', name: 'Bureau en Gros #299', address: '4141, aut. 440, Laval, Québec H7P 4W6', lang: 'fr', signoff: 'MERCI DE VOTRE CONFIANCE!' },
   jonarts: { id: 'jonarts', name: 'JONARTS Printing', address: '9010 Ave du Parc, Montreal, QC H7N1Y8', phone: '(514)7388224 ext122', lang: 'fr', signoff: 'MERCI DE VOTRE CONFIANCE!' },
   aebath: { id: 'aebath', name: 'A&E Bath and Shower', address: '', lang: 'en', signoff: 'THANK YOU FOR USING TRANSPORTOR INC!' },
-staples_canada: { id: 'client_6229', name: 'Staples Canada', address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },};
+  staples_sebastien: { id: 'client_6229',            name: 'Staples — Sébastien',  address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+  staples_patricia:  { id: 'staples_canada_patricia', name: 'Staples — Patricia',   address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+  staples_cindy:     { id: 'client_6199',             name: 'Staples — Cindy',      address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+  staples_ashraf:    { id: 'client_6234',             name: 'Staples — Ashraf',     address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+};
 
 export const DRIVERS = {
   marc: { id: 'marc', name: 'Marc Dumont', role: 'local', initials: 'MD', color: '#185FA5' },
