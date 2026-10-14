@@ -1458,14 +1458,30 @@ router.post('/webhook/google-sheets', async (req, res) => {
 
     const orderId = order.id || `DEL-${new Date().getFullYear()}-GS-${Date.now()}`;
 
-    // Try to match client by store number or email
+        // Try to match client by email first (always takes priority)
+    const GS_EMAIL_MAP = {
+      's299pc@staples.com':           'beg_ops',
+      'sebastien.gilbert@staples.ca': 'client_6229',
+      'cindy.choquette@staples.ca':   'client_6199',
+      'patricia.ramos@staples.ca':    'staples_canada_patricia',
+      'tanya@jonarts.com':            'jonarts_ops',
+      'orders@jonarts.ca':            'jonarts_ops',
+      'accounting@jonarts.com':       'jonarts_finance',
+      'aebath@gmail.com':             'aebath',
+      'sstgermain@napacanada.com':    'uap',
+    };
     let clientId = null;
-    if (order.store_number) {
+    if (order.billing_email && GS_EMAIL_MAP[order.billing_email.toLowerCase()]) {
+      const mappedId = GS_EMAIL_MAP[order.billing_email.toLowerCase()];
+      const { rows: clientCheck } = await pool.query('SELECT id FROM clients WHERE id = $1', [mappedId]);
+      if (clientCheck.length > 0) clientId = mappedId;
+    }
+    if (!clientId && order.store_number) {
       const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${order.store_number}%`]);
       if (rows.length > 0) clientId = rows[0].id;
     }
     if (!clientId && order.billing_email) {
-      const { rows } = await pool.query('SELECT id FROM clients WHERE email = $1', [order.billing_email]);
+      const { rows } = await pool.query('SELECT id FROM clients WHERE LOWER(email) = LOWER($1)', [order.billing_email]);
       if (rows.length > 0) clientId = rows[0].id;
     }
     if (!clientId) {
