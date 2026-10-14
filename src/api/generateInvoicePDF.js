@@ -6,9 +6,12 @@ const CLIENT_INFO = {
   aebath_manual:  { name: 'A&E BATH AND SHOWER',   address: '' },
   staples_canada: { name: 'STAPLES CANADA',        address: '' },
   client_6229:    { name: 'STAPLES CANADA',        address: '' },
-  staples_022:    { name: 'STAPLES 022',            address: '' },
-  staples_034:    { name: 'STAPLES 034',            address: '' },
-  uap:            { name: 'UAP INC. (NAPA CANADA)', address: '390 rue Principale\nSaint-Sauveur, Québec J0R 1R0' },
+  staples_022:             { name: 'STAPLES 022',            address: '' },
+  staples_034:             { name: 'STAPLES 034',            address: '' },
+  staples_canada_patricia: { name: 'STAPLES CANADA',         address: '' },
+  client_6199:             { name: 'STAPLES CANADA',         address: '' },
+  client_6234:             { name: 'STAPLES CANADA',         address: '' },
+  uap:                     { name: 'UAP INC. (NAPA CANADA)', address: '390 rue Principale\nSaint-Sauveur, Québec J0R 1R0' },
 };
 
 const ROUTE_LABELS = {
@@ -19,13 +22,17 @@ const ROUTE_LABELS = {
 const VENDOR_NUMBER = '166301';
 
 export function generateInvoiceHTML(invoice, orders, clientGroup, extras = [], extraPoNumber = null) {
-  const client      = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
+  const clientDefault = CLIENT_INFO[clientGroup] || CLIENT_INFO[invoice.client_id] || { name: invoice.client_name || (clientGroup||'').toUpperCase(), address: '' };
+  const client = {
+    name:    invoice.bill_to_name    || clientDefault.name,
+    address: invoice.bill_to_address || clientDefault.address,
+  };
   const dateFrom    = invoice.date_from ? new Date(invoice.date_from).toISOString().split('T')[0] : '';
   const dateTo      = invoice.date_to   ? new Date(invoice.date_to).toISOString().split('T')[0]   : '';
   const fmt         = n => `$${parseFloat(n||0).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
   const isContract  = invoice.type === 'contract';
   const isUAP       = clientGroup === 'uap' || invoice.client_id === 'uap';
-  const isStaples   = ['staples_canada','client_6229'].includes(clientGroup) || ['staples_canada','client_6229'].includes(invoice.client_id);
+  const isStaples   = ['staples_canada','client_6229','staples_canada_patricia','client_6199','client_6234'].includes(clientGroup) || ['staples_canada','client_6229','staples_canada_patricia','client_6199','client_6234'].includes(invoice.client_id);
   const poNumber    = extraPoNumber || invoice.po_number || '';
 
   // For local invoices, calculate totals from orders if not stored in DB

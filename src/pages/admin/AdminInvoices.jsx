@@ -5,6 +5,15 @@ import { CLIENTS, TPS, TVQ, CONTRACT_RATES } from '../../data/store';
 const STATUS_BADGE = { paid:'badge-success', pending:'badge-warning', overdue:'badge-danger', draft:'badge-gray' };
 const STATUS_OPTIONS = ['pending','paid','overdue','draft'];
 
+const STAPLES_STORES = [
+  { label: '— None (use client default) —', name: '', address: '' },
+  { label: 'Staples #022 — Montréal',       name: 'STAPLES #022', address: '770 Rue Notre-Dame Ouest, Montréal, QC H3C 1J2' },
+  { label: 'Staples #122 — Rosemère',       name: 'STAPLES #122', address: '315 Boul Curé-Labelle, Rosemère, QC' },
+  { label: 'Staples #308 — Boisbriand',     name: 'STAPLES #308', address: '3420 Ave des Grands Tourelles, Boisbriand, QC' },
+  { label: 'Staples #034 — Québec',         name: 'STAPLES #034', address: '2975 Blvd Laurier, Québec, QC' },
+  { label: 'Custom…',                        name: '__custom__',   address: '' },
+];
+
 export default function AdminInvoices() {
   const { invoices, addInvoice, fetchInvoices } = useApp();
   const [tab, setTab] = useState('all');
@@ -36,6 +45,30 @@ export default function AdminInvoices() {
     // PO number edit state
   const [showEditPO, setShowEditPO] = useState(false);
   const [editPO,     setEditPO]     = useState('');
+
+  // Bill To override state
+  const [showEditBillTo,   setShowEditBillTo]   = useState(false);
+  const [editBillToStore,  setEditBillToStore]  = useState('');
+  const [editBillToName,   setEditBillToName]   = useState('');
+  const [editBillToAddress,setEditBillToAddress]= useState('');
+  const [savingBillTo,     setSavingBillTo]     = useState(false);
+
+  const handleSaveBillTo = async () => {
+    setSavingBillTo(true);
+    try {
+      const name    = editBillToStore === '__custom__' ? editBillToName    : (STAPLES_STORES.find(s=>s.name===editBillToStore)?.name    || '');
+      const address = editBillToStore === '__custom__' ? editBillToAddress : (STAPLES_STORES.find(s=>s.name===editBillToStore)?.address || '');
+      await fetch(`/api/invoices/${selected.id}/bill-to`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bill_to_name: name || null, bill_to_address: address || null }),
+      });
+      await fetchInvoices();
+      setSelected(prev => ({ ...prev, bill_to_name: name || null, bill_to_address: address || null }));
+      setShowEditBillTo(false);
+    } catch(e) { console.error(e); }
+    setSavingBillTo(false);
+  };
 
   const handleSavePO = async () => {
     try {
@@ -446,10 +479,11 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
                   {label:'Type', val:selected.type==='contract'?`Contract · ${selected.route}`:'Local'},
                   {label:'Period', val:`${String(selected.date_from||'').split('T')[0]} – ${String(selected.date_to||'').split('T')[0]}`},
           selected.client_id === 'staples_canada' || selected.client_id === 'client_6229' ? {label:'PO Number ✏️', val: selected.po_number || 'Not set', clickable: 'po'} : null,
+                  {label:'Bill To ✏️', val: selected.bill_to_name || '(default)', clickable: 'billto'},
                   selected.type==='contract'&&selected.days?{label:'Days', val:`${selected.days} days`}:null,
                 ].filter(Boolean).filter(i=>i.val).map((item,i)=>(
                   <div key={i} className="rounded-xl p-3" style={{background:'var(--tn-warm)',cursor:item.clickable?'pointer':'default'}}
-                    onClick={item.clickable==='client'?()=>{fetchAllClients();setShowClientSelect(true);}:item.clickable==='po'?()=>{setEditPO(selected.po_number||'');setShowEditPO(true);}:undefined}>
+                    onClick={item.clickable==='client'?()=>{fetchAllClients();setShowClientSelect(true);}:item.clickable==='po'?()=>{setEditPO(selected.po_number||'');setShowEditPO(true);}:item.clickable==='billto'?()=>{setEditBillToStore(selected.bill_to_name||'');setEditBillToName(selected.bill_to_name||'');setEditBillToAddress(selected.bill_to_address||'');setShowEditBillTo(true);}:undefined}>
                     <p className="text-xs" style={{color:'var(--tn-gold)'}}>{item.label} {item.clickable&&<span style={{color:'var(--tn-red)'}}>✏️</span>}</p>
                     <p className="font-semibold text-sm mt-0.5">{item.val}</p>
                   </div>
@@ -482,6 +516,44 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
     </button>
   </div>
 )}
+
+              {/* Bill To override */}
+              {showEditBillTo&&(
+                <div className="rounded-xl p-4" style={{background:'#EFF6FF',border:'0.5px solid #185FA5'}}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium" style={{color:'#185FA5'}}>🏪 Bill To override</p>
+                    <button onClick={()=>setShowEditBillTo(false)} className="text-xs" style={{color:'#185FA5'}}>✕ Cancel</button>
+                  </div>
+                  <select className="input mb-2"
+                    value={editBillToStore}
+                    onChange={e=>{
+                      const s=STAPLES_STORES.find(x=>x.name===e.target.value);
+                      setEditBillToStore(e.target.value);
+                      if(s&&s.name!=='__custom__'){setEditBillToName(s.name);setEditBillToAddress(s.address);}
+                      else if(e.target.value===''){setEditBillToName('');setEditBillToAddress('');}
+                    }}>
+                    {STAPLES_STORES.map(s=><option key={s.name} value={s.name}>{s.label}</option>)}
+                  </select>
+                  {(editBillToStore==='__custom__'||!STAPLES_STORES.find(s=>s.name===editBillToStore))&&(
+                    <div className="space-y-2 mt-2">
+                      <input className="input" placeholder="Bill To name (e.g. STAPLES #999)" value={editBillToName} onChange={e=>setEditBillToName(e.target.value)}/>
+                      <textarea className="input" rows={2} placeholder="Full address" value={editBillToAddress} onChange={e=>setEditBillToAddress(e.target.value)} style={{resize:'none'}}/>
+                    </div>
+                  )}
+                  {editBillToStore&&editBillToStore!=='__custom__'&&STAPLES_STORES.find(s=>s.name===editBillToStore)&&(
+                    <div className="rounded-lg p-2 mt-1 text-xs" style={{background:'white',color:'#185FA5'}}>
+                      <p className="font-semibold">{editBillToName}</p>
+                      <p style={{color:'var(--tn-gold)'}}>{editBillToAddress}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={()=>setShowEditBillTo(false)} className="btn btn-outline flex-1 justify-center text-xs">Cancel</button>
+                    <button onClick={handleSaveBillTo} disabled={savingBillTo} className="btn flex-1 justify-center text-xs" style={{background:'var(--tn-red)',color:'white',opacity:savingBillTo?0.6:1}}>
+                      {savingBillTo?'⏳ Saving...':'💾 Save Bill To'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Contract edit */}
               {selected.type==='contract'&&(

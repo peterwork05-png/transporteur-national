@@ -568,6 +568,19 @@ router.patch('/invoices/:id/pay', async (req, res) => {
   }
 });
 
+router.patch('/invoices/:id/bill-to', async (req, res) => {
+  try {
+    const { bill_to_name, bill_to_address } = req.body;
+    await pool.query(
+      'UPDATE invoices SET bill_to_name = $1, bill_to_address = $2 WHERE id = $3',
+      [bill_to_name || null, bill_to_address || null, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── STATS ────────────────────────────────────────────────
 
 router.get('/stats/today', async (req, res) => {
