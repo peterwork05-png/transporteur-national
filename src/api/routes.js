@@ -332,11 +332,12 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
       'sebastien.gilbert@staples.ca': 'client_6229',
       'cindy.choquette@staples.ca':   'client_6199',
       'patricia.ramos@staples.ca':    'staples_canada_patricia',
-      'ashraf.alsarraf@staples.ca':   'client_6234',
-      'tanya@jonarts.com':            'jonarts_ops',
-      'orders@jonarts.ca':            'jonarts_ops',
-      'accounting@jonarts.com':       'jonarts_finance',
-      'aebath@gmail.com':             'aebath',
+      'ashraf.alsarraf@staples.ca':        'client_6234',
+      'marie-france.tanguay@staples.ca':   'staples_marie_france',
+      'tanya@jonarts.com':                 'jonarts_ops',
+      'orders@jonarts.ca':                 'jonarts_ops',
+      'accounting@jonarts.com':            'jonarts_finance',
+      'aebath@gmail.com':                  'aebath',
     };
    if (billingEmail && EMAIL_CLIENT_MAP[billingEmail.toLowerCase()]) {
   const mappedId = EMAIL_CLIENT_MAP[billingEmail.toLowerCase()];
@@ -1478,12 +1479,13 @@ router.post('/webhook/google-sheets', async (req, res) => {
       'sebastien.gilbert@staples.ca': 'client_6229',
       'cindy.choquette@staples.ca':   'client_6199',
       'patricia.ramos@staples.ca':    'staples_canada_patricia',
-      'ashraf.alsarraf@staples.ca':   'client_6234',
-      'tanya@jonarts.com':            'jonarts_ops',
-      'orders@jonarts.ca':            'jonarts_ops',
-      'accounting@jonarts.com':       'jonarts_finance',
-      'aebath@gmail.com':             'aebath',
-      'sstgermain@napacanada.com':    'uap',
+      'ashraf.alsarraf@staples.ca':        'client_6234',
+      'marie-france.tanguay@staples.ca':   'staples_marie_france',
+      'tanya@jonarts.com':                 'jonarts_ops',
+      'orders@jonarts.ca':                 'jonarts_ops',
+      'accounting@jonarts.com':            'jonarts_finance',
+      'aebath@gmail.com':                  'aebath',
+      'sstgermain@napacanada.com':         'uap',
     };
     let clientId = null;
     if (order.billing_email && GS_EMAIL_MAP[order.billing_email.toLowerCase()]) {

@@ -6,7 +6,8 @@ export const CLIENTS = {
   staples_sebastien: { id: 'client_6229',            name: 'Staples — Sébastien',  address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
   staples_patricia:  { id: 'staples_canada_patricia', name: 'Staples — Patricia',   address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
   staples_cindy:     { id: 'client_6199',             name: 'Staples — Cindy',      address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
-  staples_ashraf:    { id: 'client_6234',             name: 'Staples — Ashraf',     address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+  staples_ashraf:       { id: 'client_6234',          name: 'Staples — Ashraf',        address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
+  staples_marie_france: { id: 'staples_marie_france', name: 'Staples — Marie-France',  address: '', lang: 'en', signoff: 'THANK YOU FOR YOUR BUSINESS!' },
 };
 
 export const DRIVERS = {
