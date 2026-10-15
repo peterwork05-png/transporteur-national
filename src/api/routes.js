@@ -1428,7 +1428,10 @@ router.post('/invoices/:id/recalculate', async (req, res) => {
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS invoice_orders (invoice_id INTEGER, order_id VARCHAR(100), PRIMARY KEY (invoice_id, order_id))`);
     
-    const { rows: invRows } = await pool.query(`SELECT * FROM invoices WHERE id = $1`, [req.params.id]);
+    const { rows: invRows } = await pool.query(
+      `SELECT i.*, COALESCE(c.client_group, i.client_id) as client_group FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = $1`,
+      [req.params.id]
+    );
     if (!invRows.length || invRows[0].type !== 'local') return res.json({ success: false });
     const inv = invRows[0];
 
@@ -1444,7 +1447,7 @@ router.post('/invoices/:id/recalculate', async (req, res) => {
         LEFT JOIN clients c ON o.client_id = c.id
         WHERE c.client_group = $1 AND o.status = 'delivered'
           AND o.date >= $2 AND o.date <= $3
-      `, [inv.client_group || inv.client_id, inv.date_from, inv.date_to]);
+      `, [inv.client_group, inv.date_from, inv.date_to]);
       orders = rows;
     }
 
