@@ -115,8 +115,8 @@ export default function AdminInvoices() {
       switch(sortBy) {
         case 'id_asc': return parseInt(a.id)-parseInt(b.id);
         case 'id_desc': return parseInt(b.id)-parseInt(a.id);
-        case 'amount_asc': return parseFloat(a.amount||0)-parseFloat(b.amount||0);
-        case 'amount_desc': return parseFloat(b.amount||0)-parseFloat(a.amount||0);
+        case 'amount_asc': return parseFloat(a.total||0)-parseFloat(b.total||0);
+        case 'amount_desc': return parseFloat(b.total||0)-parseFloat(a.total||0);
         case 'date_asc': return new Date(a.date_from||0)-new Date(b.date_from||0);
         case 'date_desc': return new Date(b.date_from||0)-new Date(a.date_from||0);
         case 'client': return (a.client_name||'').localeCompare(b.client_name||'');
@@ -398,7 +398,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
                 <td className="px-4 py-3"><span className={`badge ${inv.type==='contract'?'badge-info':'badge-gray'}`}>{inv.type==='contract'?`Contract · ${inv.route}`:'Local'}</span></td>
                 <td className="px-4 py-3 text-sm">{getClientName(inv)}</td>
                 <td className="px-4 py-3 text-sm" style={{color:'var(--tn-gold)'}}>{String(inv.date_from||'').split('T')[0]} – {String(inv.date_to||'').split('T')[0]}</td>
-                <td className="px-4 py-3 text-sm font-semibold">{fmt(inv.amount)}</td>
+                <td className="px-4 py-3 text-sm font-semibold">{fmt(inv.total)}</td>
                 <td className="px-4 py-3"><span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'}`}>{inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}</span></td>
                 <td className="px-4 py-3">{inv.pdf_url?<span className="badge badge-success">📄 PDF</span>:<span className="badge badge-gray">No PDF</span>}</td>
               </tr>
@@ -421,7 +421,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
               <span className={`badge ${STATUS_BADGE[inv.status]||'badge-gray'} flex-shrink-0`}>{inv.status?.charAt(0).toUpperCase()+inv.status?.slice(1)}</span>
             </div>
             <div className="flex items-center justify-between pt-2" style={{borderTop:'0.5px solid var(--tn-border)'}}>
-              <p className="font-semibold text-sm">{fmt(inv.amount)}</p>
+              <p className="font-semibold text-sm">{fmt(inv.total)}</p>
               {inv.pdf_url?<span className="badge badge-success">📄 PDF</span>:<span className="badge badge-gray">No PDF</span>}
             </div>
           </div>
