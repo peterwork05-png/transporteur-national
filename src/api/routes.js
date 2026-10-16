@@ -1473,8 +1473,6 @@ router.post('/webhook/google-sheets', async (req, res) => {
   try {
     const order = req.body;
     console.log('Google Sheets order received:', order.id);
-    console.log('Google Sheets payload keys:', JSON.stringify(Object.keys(order)));
-    console.log('Google Sheets full payload:', JSON.stringify(order));
 
     const orderId = order.id || `DEL-${new Date().getFullYear()}-GS-${Date.now()}`;
 
