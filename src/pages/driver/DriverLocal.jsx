@@ -36,7 +36,6 @@ export default function DriverLocal() {
   const [showAttempted, setShowAttempted] = useState(null);
   const [attemptedNote, setAttemptedNote] = useState('');
   const sigCanvasRef = useRef(null);
-  const locationInterval = useRef(null);
 
   usePushNotifications('driver', driverId);
 
@@ -76,29 +75,26 @@ export default function DriverLocal() {
     return () => { if (iv) clearInterval(iv); };
   }, [driverId, period, fetchMyOrders]);
 
-  const startLocationSharing = useCallback(() => {
-    if (!navigator.geolocation) return;
+  // Continuous GPS — sends location every 30s while the screen is open
+  useEffect(() => {
+    if (!navigator.geolocation || !driverId) return;
     const sendLocation = () => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        fetch(`/api/drivers/${driverId}/location`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        }).catch(() => {});
-      }, () => {}, { enableHighAccuracy: true });
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          fetch(`/api/drivers/${driverId}/location`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          }).catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     };
     sendLocation();
-    locationInterval.current = setInterval(sendLocation, 30000);
+    const iv = setInterval(sendLocation, 30000);
+    return () => clearInterval(iv);
   }, [driverId]);
-
-  const stopLocationSharing = useCallback(() => {
-    if (locationInterval.current) {
-      clearInterval(locationInterval.current);
-      locationInterval.current = null;
-    }
-  }, []);
-
-  useEffect(() => { return () => stopLocationSharing(); }, []);
 
   const delivered = orders.filter(o => o.status === 'delivered').length;
   const remaining = orders.filter(o => !['delivered','attempted'].includes(o.status)).length;
@@ -129,13 +125,11 @@ export default function DriverLocal() {
     if (activeEnroute) return alert('Finish current delivery first');
     setActiveEnroute(id);
     updateStatus(id, 'enroute', { on_way_at: now() });
-    startLocationSharing();
   };
 
   const cancelEnroute = id => {
     setActiveEnroute(null);
     updateStatus(id, 'picked');
-    stopLocationSharing();
   };
 
   const openProof = id => {
@@ -157,7 +151,6 @@ export default function DriverLocal() {
     setActiveEnroute(null);
     setShowAttempted(null);
     setAttemptedNote('');
-    stopLocationSharing();
   };
 
   const openAttempted = (id) => {
@@ -207,7 +200,6 @@ export default function DriverLocal() {
     });
     setActiveEnroute(null);
     setShowProof(null);
-    stopLocationSharing();
   };
 
   const openGoogleMaps = (order) => {

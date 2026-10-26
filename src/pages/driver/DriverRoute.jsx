@@ -28,7 +28,6 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
   const [photoFile,     setPhotoFile]     = useState(null);
   const [sigDataUrl,    setSigDataUrl]    = useState(null);
   const sigCanvasRef = useRef(null);
-  const locationInterval = useRef(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -64,25 +63,25 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
     return () => { if(iv) clearInterval(iv); };
   }, [fetchOrders, period]);
 
-  const startLocationSharing = useCallback(() => {
-    if (!navigator.geolocation) return;
-    const send = () => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        fetch(`/api/drivers/${driverId}/location`, {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        }).catch(() => {});
-      }, () => {}, { enableHighAccuracy: true });
+  // Continuous GPS — sends location every 30s while the screen is open
+  useEffect(() => {
+    if (!navigator.geolocation || !driverId) return;
+    const sendLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          fetch(`/api/drivers/${driverId}/location`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          }).catch(() => {});
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     };
-    send();
-    locationInterval.current = setInterval(send, 30000);
+    sendLocation();
+    const iv = setInterval(sendLocation, 30000);
+    return () => clearInterval(iv);
   }, [driverId]);
-
-  const stopLocationSharing = useCallback(() => {
-    if (locationInterval.current) { clearInterval(locationInterval.current); locationInterval.current = null; }
-  }, []);
-
-  useEffect(() => () => stopLocationSharing(), []);
 
   const delivered = orders.filter(o => o.status === 'delivered').length;
   const remaining = orders.filter(o => !['delivered','attempted'].includes(o.status)).length;
@@ -106,13 +105,13 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 
   const acceptOrder    = id => updateStatus(id, 'accepted');
   const pickUp         = id => updateStatus(id, 'picked', { picked_up_at: now() });
-  const startDelivery  = id => { if(activeEnroute) return alert('Finish current delivery first'); setActiveEnroute(id); updateStatus(id, 'enroute', { on_way_at: now() }); startLocationSharing(); };
-  const cancelEnroute  = id => { setActiveEnroute(null); updateStatus(id, 'picked'); stopLocationSharing(); };
+  const startDelivery  = id => { if(activeEnroute) return alert('Finish current delivery first'); setActiveEnroute(id); updateStatus(id, 'enroute', { on_way_at: now() }); };
+  const cancelEnroute  = id => { setActiveEnroute(null); updateStatus(id, 'picked'); };
   const openAttempted  = id => { setShowAttempted(id); setAttemptedNote(''); };
 
   const submitAttempted = async () => {
     await updateStatus(showAttempted, 'attempted', { delivered_at: now(), notes: attemptedNote ? `[Attempted] ${attemptedNote}` : '[Attempted delivery]' });
-    setActiveEnroute(null); setShowAttempted(null); setAttemptedNote(''); stopLocationSharing();
+    setActiveEnroute(null); setShowAttempted(null); setAttemptedNote('');
   };
 
   const openProof = id => { setShowProof(id); setProofStep(1); setPhotoTaken(false); setPhotoDataUrl(null); setPhotoFile(null); setSigDrawn(false); setSigDataUrl(null); setRecipientName(''); };
@@ -134,7 +133,7 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
       } catch(e) {}
     }
     updateStatus(showProof, 'delivered', { delivered_at: now(), recipient_name: recipientName, photo_url, signature_url });
-    setActiveEnroute(null); setShowProof(null); stopLocationSharing();
+    setActiveEnroute(null); setShowProof(null);
   };
 
   const openGoogleMaps = (order) => {

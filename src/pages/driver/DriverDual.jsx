@@ -5,6 +5,37 @@ import { format } from 'date-fns';
 import { useParams } from 'react-router-dom';
 import { ONTARIO_STOPS, QUEBEC_STOPS } from '../../data/store';
 
+// ─── CONTINUOUS GPS HOOK ─────────────────────────────────────────────────────
+// Sends location every 30s as long as this hook is mounted (i.e. while the
+// driver screen is open), regardless of which tab is active.
+function useContinuousGPS(driverId) {
+  const intervalRef = useRef(null);
+
+  const sendLocation = useCallback(() => {
+    if (!navigator.geolocation || !driverId) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        fetch(`/api/drivers/${driverId}/location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        }).catch(() => {});
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    sendLocation(); // send immediately on mount
+    intervalRef.current = setInterval(sendLocation, 30000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [driverId, sendLocation]);
+}
+
 const STATUS_RANK  = { waiting:0, accepted:1, picked:2, enroute:3, delivered:4, attempted:3 };
 const STATUS_LABEL = { waiting:'Awaiting pickup', accepted:'Accepted', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
 const STATUS_COLOR = { waiting:'badge-gray', accepted:'badge-info', picked:'badge-warning', enroute:'badge-info', delivered:'badge-success', attempted:'badge-danger' };
@@ -29,7 +60,6 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
   const [photoFile,     setPhotoFile]     = useState(null);
   const [sigDataUrl,    setSigDataUrl]    = useState(null);
   const sigCanvasRef = useRef(null);
-  const locationInterval = useRef(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -65,26 +95,6 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
     return () => { if(iv) clearInterval(iv); };
   }, [fetchOrders, period]);
 
-  const startLocationSharing = useCallback(() => {
-    if (!navigator.geolocation) return;
-    const send = () => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        fetch(`/api/drivers/${driverId}/location`, {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        }).catch(() => {});
-      }, () => {}, { enableHighAccuracy: true });
-    };
-    send();
-    locationInterval.current = setInterval(send, 30000);
-  }, [driverId]);
-
-  const stopLocationSharing = useCallback(() => {
-    if (locationInterval.current) { clearInterval(locationInterval.current); locationInterval.current = null; }
-  }, []);
-
-  useEffect(() => () => stopLocationSharing(), []);
-
   const delivered = orders.filter(o => o.status === 'delivered').length;
   const remaining = orders.filter(o => !['delivered','attempted'].includes(o.status)).length;
   const filteredOrders = orders.filter(o => {
@@ -107,13 +117,13 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 
   const acceptOrder    = id => updateStatus(id, 'accepted');
   const pickUp         = id => updateStatus(id, 'picked', { picked_up_at: now() });
-  const startDelivery  = id => { if(activeEnroute) return alert('Finish current delivery first'); setActiveEnroute(id); updateStatus(id, 'enroute', { on_way_at: now() }); startLocationSharing(); };
-  const cancelEnroute  = id => { setActiveEnroute(null); updateStatus(id, 'picked'); stopLocationSharing(); };
+  const startDelivery  = id => { if(activeEnroute) return alert('Finish current delivery first'); setActiveEnroute(id); updateStatus(id, 'enroute', { on_way_at: now() }); };
+  const cancelEnroute  = id => { setActiveEnroute(null); updateStatus(id, 'picked'); };
   const openAttempted  = id => { setShowAttempted(id); setAttemptedNote(''); };
 
   const submitAttempted = async () => {
     await updateStatus(showAttempted, 'attempted', { delivered_at: now(), notes: attemptedNote ? `[Attempted] ${attemptedNote}` : '[Attempted delivery]' });
-    setActiveEnroute(null); setShowAttempted(null); setAttemptedNote(''); stopLocationSharing();
+    setActiveEnroute(null); setShowAttempted(null); setAttemptedNote('');
   };
 
   const openProof = id => { setShowProof(id); setProofStep(1); setPhotoTaken(false); setPhotoDataUrl(null); setPhotoFile(null); setSigDrawn(false); setSigDataUrl(null); setRecipientName(''); };
@@ -135,7 +145,7 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
       } catch(e) {}
     }
     updateStatus(showProof, 'delivered', { delivered_at: now(), recipient_name: recipientName, photo_url, signature_url });
-    setActiveEnroute(null); setShowProof(null); stopLocationSharing();
+    setActiveEnroute(null); setShowProof(null);
   };
 
   const openGoogleMaps = (order) => {
@@ -376,23 +386,6 @@ function LocalTab({ driverId, driverColor, driverInitials }) {
 function RouteTab({ driverId, route }) {
   const routeKey = driverId === 'pierre' ? 'quebec' : 'ontario';
   const stops    = routeKey === 'ontario' ? ONTARIO_STOPS : QUEBEC_STOPS;
-  const locationInterval = useRef(null);
-
-  // GPS sharing — starts when route tab mounts, stops when it unmounts
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    const send = () => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        fetch(`/api/drivers/${driverId}/location`, {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        }).catch(() => {});
-      }, () => {}, { enableHighAccuracy: true });
-    };
-    send();
-    locationInterval.current = setInterval(send, 30000);
-    return () => { if (locationInterval.current) clearInterval(locationInterval.current); };
-  }, [driverId]);
 
   const today = new Date().toISOString().split('T')[0];
   const STORAGE_KEY = `route_${routeKey}_date`;
@@ -604,6 +597,9 @@ export default function DriverDual() {
   const driverColor    = driverObj?.color    || 'var(--tn-red)';
   const driverInitials = driverObj?.initials || driverId?.substring(0,2).toUpperCase() || 'DR';
   const route          = driverObj?.role === 'local_route' ? (driverId === 'pierre' ? 'Québec' : 'Ontario') : 'Route';
+
+  // Continuous GPS — runs the whole time the driver screen is open, tab-independent
+  useContinuousGPS(driverId);
 
   const [tab, setTab] = useState('route'); // default to route
 
