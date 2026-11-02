@@ -34,15 +34,15 @@ export function startScheduler() {
       } catch(err) { console.error('❌ Local invoice error:', err.message); }
     }
 
-    // Contract invoices — every Sunday at noon ET
-    if (etDay === 0 && etHour === 12 && isTopOfHour) {
-      const { from, to } = getPreviousWeekDates(now);
-      console.log(`📄 Auto contract invoice triggered for ${from} – ${to}`);
-      try {
-        const results = await generateContractInvoices(from, to, 5);
-        console.log(`✅ Contract invoices: ${results.invoices?.length || 0} created`);
-      } catch(err) { console.error('❌ Contract invoice error:', err.message); }
-    }
+    // Contract invoices — DISABLED (Quebec/Ontario contracts ended)
+    // if (etDay === 0 && etHour === 12 && isTopOfHour) {
+    //   const { from, to } = getPreviousWeekDates(now);
+    //   console.log(`📄 Auto contract invoice triggered for ${from} – ${to}`);
+    //   try {
+    //     const results = await generateContractInvoices(from, to, 5);
+    //     console.log(`✅ Contract invoices: ${results.invoices?.length || 0} created`);
+    //   } catch(err) { console.error('❌ Contract invoice error:', err.message); }
+    // }
         // UAP invoice — every Friday at noon ET
     if (etDay === 5 && etHour === 12 && isTopOfHour) {
       const { generateUAPInvoice } = await import('./autoInvoice.js');
