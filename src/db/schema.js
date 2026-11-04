@@ -123,6 +123,13 @@ export async function createTables() {
       );
     `);
 
+    // One-time fix: reassign mis-imported BEG orders to correct client
+    await client.query(`
+      UPDATE orders SET client_id = 'beg_ops'
+      WHERE id IN ('DEL-2026-6453', 'DEL-2026-6454')
+        AND client_id != 'beg_ops'
+    `);
+
     // Ensure WooCommerce webhook columns exist (idempotent — safe to run every startup)
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_associate_name VARCHAR(100)`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
