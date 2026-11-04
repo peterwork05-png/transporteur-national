@@ -1827,9 +1827,26 @@ router.post('/import/woocommerce', async (req, res) => {
         };
         const status = statusMap[order.status] || 'waiting';
 
-        // Match client by store number first, then email
+        // Match client — email map takes priority (same as webhook handler)
+        const EMAIL_CLIENT_MAP = {
+          's299pc@staples.com':           'beg_ops',
+          'sebastien.gilbert@staples.ca': 'client_6229',
+          'cindy.choquette@staples.ca':   'client_6199',
+          'patricia.ramos@staples.ca':    'staples_canada_patricia',
+          'ashraf.alsarraf@staples.ca':        'client_6234',
+          'marie-france.tanguay@staples.ca':   'staples_marie_france',
+          'tanya@jonarts.com':                 'jonarts_ops',
+          'orders@jonarts.ca':                 'jonarts_ops',
+          'accounting@jonarts.com':            'jonarts_finance',
+          'aebath@gmail.com':                  'aebath',
+        };
         let clientId = null;
-        if (storeNum) {
+        if (billingEmail && EMAIL_CLIENT_MAP[billingEmail.toLowerCase()]) {
+          const mappedId = EMAIL_CLIENT_MAP[billingEmail.toLowerCase()];
+          const { rows: clientCheck } = await pool.query('SELECT id FROM clients WHERE id = $1', [mappedId]);
+          if (clientCheck.length > 0) clientId = mappedId;
+        }
+        if (!clientId && storeNum) {
           const { rows } = await pool.query("SELECT id FROM clients WHERE name ILIKE $1", [`%${storeNum}%`]);
           if (rows.length > 0) clientId = rows[0].id;
         }
