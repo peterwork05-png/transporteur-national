@@ -248,6 +248,9 @@ router.post('/orders', async (req, res) => {
 // ── WOOCOMMERCE WEBHOOK ──────────────────────────────────
 
 router.post('/webhook/woocommerce', async (req, res) => {
+  // Respond immediately so WooCommerce doesn't time out waiting for us
+  res.json({ received: true });
+
   try {
     const order = req.body;
     console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 500));
@@ -369,25 +372,6 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
       clientId = newClientId;
     }
 
-    // Ensure extra columns exist
-    try {
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_associate_name VARCHAR(100)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_name VARCHAR(100)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_email VARCHAR(100)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_phone VARCHAR(50)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location TEXT`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_associate_name VARCHAR(100)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_name VARCHAR(100)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_business_phone VARCHAR(50)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS po_number VARCHAR(50)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS requested_delivery_time VARCHAR(20)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_number VARCHAR(50)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS type_boite VARCHAR(50)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_dropoff_date VARCHAR(20)`);
-      await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_pickup_date VARCHAR(20)`);
-    } catch(e) { console.log('Column add note:', e.message); }
-
     await pool.query(`
       INSERT INTO orders (id, client_id, address, boxes, amount, status, date, notes,
         billing_name, billing_email, billing_phone, pickup_location,
@@ -406,14 +390,12 @@ const amount = parseFloat(order.total || 0) - parseFloat(order.total_tax || 0);
 
     console.log(`✅ Order: ${orderId} | To: ${toAssociateName} at ${address} | Store: ${storeNumber} | PO: ${poNumber}`);
     // Notify admins of new order
-try {
-  const { notifyAdmins } = await import('./pushNotifications.js');
-  await notifyAdmins('📦 New order received', `${orderId} · ${address}`, { url: '/admin' });
-} catch(e) {}
-    res.json({ success: true, order_id: orderId, client_id: clientId, to: address, store: storeNumber });
+    try {
+      const { notifyAdmins } = await import('./pushNotifications.js');
+      await notifyAdmins('📦 New order received', `${orderId} · ${address}`, { url: '/admin' });
+    } catch(e) {}
   } catch (err) {
     console.error('❌ Webhook error:', err);
-    res.status(500).json({ error: err.message });
   }
 });
 
