@@ -1705,6 +1705,24 @@ router.get('/gmail/status', async (req, res) => {
     email: process.env.GMAIL_USER || null,
   });
 });
+// ── ORDER CLIENT REASSIGN ─────────────────────────────────
+
+router.post('/orders/:id/reassign-client', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { client_id } = req.body;
+    if (!client_id) return res.status(400).json({ error: 'client_id required' });
+    const { rows } = await pool.query(
+      'UPDATE orders SET client_id = $1 WHERE id = $2 RETURNING id, client_id',
+      [client_id, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    res.json({ success: true, order: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── WOOCOMMERCE IMPORT ────────────────────────────────────
 
 router.post('/import/woocommerce', async (req, res) => {
