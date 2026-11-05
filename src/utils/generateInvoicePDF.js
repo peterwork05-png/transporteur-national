@@ -91,8 +91,8 @@ export function generateInvoicePDF(invoice, clientInfo) {
       <h3>De</h3>
       <p><strong>Transporteur National MC INC</strong></p>
       <p>Terrebonne, Québec</p>
-      <p>TPS: 784789315RT0001</p>
-      <p>TVQ: 1224260784TQ0001</p>
+      <p>TPS: 716580816RT0001</p>
+      <p>TVQ: 1231116555TQ0001</p>
     </div>
   </div>
 
@@ -140,7 +140,7 @@ export function generateInvoicePDF(invoice, clientInfo) {
   </div>
 
   <div class="tax-info">
-    <p>No. TPS: 784789315RT0001 | No. TVQ: 1224260784TQ0001</p>
+    <p>No. TPS: 716580816RT0001 | No. TVQ: 1231116555TQ0001</p>
     <p>Paiement par EFT. Merci de votre confiance!</p>
   </div>
 

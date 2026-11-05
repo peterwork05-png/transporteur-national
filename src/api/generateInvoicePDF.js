@@ -128,8 +128,8 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = [], e
         <div style="font-size:12px;color:#666;margin-top:4px">${dateFrom} – ${dateTo}</div>
         ${isContract && !isUAP ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">Route ${ROUTE_LABELS[invoice.route] || invoice.route}</div>` : ''}
         ${isUAP ? `<div style="font-size:11px;color:#C0392B;margin-top:4px;font-weight:bold">UAP St-Sauveur</div>` : ''}
-        <div style="font-size:11px;color:#666;margin-top:4px">TPS: 784789315RT0001</div>
-        <div style="font-size:11px;color:#666">TVQ: 1224260784TQ0001</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">TPS: 716580816RT0001</div>
+        <div style="font-size:11px;color:#666">TVQ: 1231116555TQ0001</div>
       </td>
     </tr>
   </table>

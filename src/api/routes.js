@@ -799,7 +799,7 @@ router.post('/invoices/send-reminder', async (req, res) => {
           <p style="color:#1A1208">Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
           <div style="background:white;border-radius:8px;padding:12px;margin:10px 0;border:1px solid #e0d9cc">
             <p style="margin:0;color:#1A1208"><strong>Transporteur National MC INC.</strong></p>
-            <p style="margin:4px 0;color:#8B6914;font-size:13px">TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+            <p style="margin:4px 0;color:#8B6914;font-size:13px">TPS: 716580816RT0001 | TVQ: 1231116555TQ0001</p>
           </div>
 
           <p style="color:#1A1208">Si vous avez des questions, n'hésitez pas à nous contacter. / If you have any questions, please don't hesitate to contact us.</p>
@@ -1187,7 +1187,7 @@ router.post('/invoices/:id/send-email', async (req, res) => {
           <p style="color:#1A1208;margin-top:16px">Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
           <div style="background:white;border-radius:8px;padding:12px;margin:10px 0;border:1px solid #e0d9cc">
             <p style="margin:0;color:#1A1208"><strong>Transporteur National MC INC.</strong></p>
-            <p style="margin:4px 0;color:#8B6914;font-size:13px">TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+            <p style="margin:4px 0;color:#8B6914;font-size:13px">TPS: 716580816RT0001 | TVQ: 1231116555TQ0001</p>
           </div>
           <p style="color:#1A1208">Merci / Thank you,<br><strong>Transporteur National MC INC.</strong><br>📧 transporteurnationalmc@gmail.com</p>
         </div>

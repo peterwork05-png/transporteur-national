@@ -451,7 +451,7 @@ function ReminderButton({ inv, getClientName, fmt }) {
                     <p>Pour effectuer votre paiement par virement électronique / To make payment by EFT:</p>
                     <div style={{background:'#FAF7F0',borderRadius:'6px',padding:'8px',border:'1px solid #e0d9cc'}}>
                       <p style={{margin:0}}><strong>Transporteur National MC INC.</strong></p>
-                      <p style={{margin:'2px 0',color:'#8B6914'}}>TPS: 784789315RT0001 | TVQ: 1224260784TQ0001</p>
+                      <p style={{margin:'2px 0',color:'#8B6914'}}>TPS: 716580816RT0001 | TVQ: 1231116555TQ0001</p>
                     </div>
                     <p>Si vous avez des questions, n'hésitez pas à nous contacter. / If you have any questions, please don't hesitate to contact us.</p>
                     <p>Merci / Thank you,<br/><strong>Transporteur National MC INC.</strong><br/>📧 transporteurnationalmc@gmail.com</p>
