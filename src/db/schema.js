@@ -146,6 +146,22 @@ export async function createTables() {
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS to_dropoff_date VARCHAR(20)`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS from_pickup_date VARCHAR(20)`);
 
+    // Invoice extras + UAP hours (hours × $24 = UAP base, extras added on top)
+    await client.query(`CREATE TABLE IF NOT EXISTS invoice_extras (
+      id SERIAL PRIMARY KEY,
+      invoice_id INTEGER NOT NULL,
+      description VARCHAR(200) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    await client.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hours NUMERIC(7,2)`);
+    // Backfill hours for UAP invoices without extras (subtotal is pure hours × $24)
+    await client.query(`
+      UPDATE invoices i SET hours = ROUND(i.subtotal / 24, 2)
+      WHERE i.client_id = 'uap' AND i.hours IS NULL
+        AND NOT EXISTS (SELECT 1 FROM invoice_extras e WHERE e.invoice_id = i.id)
+    `);
+
     console.log('✅ Database tables created successfully');
   } catch (err) {
     console.error('❌ Error creating tables:', err);

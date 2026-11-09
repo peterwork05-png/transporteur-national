@@ -1556,12 +1556,15 @@ router.post('/webhook/google-sheets', async (req, res) => {
 // Edit contract invoice days/route
 router.patch('/invoices/:id/edit-contract', async (req, res) => {
   try {
-    const { days, route, subtotal, tps, tvq, total } = req.body;
+    const { days, route, hours } = req.body;
     await pool.query(
-      `UPDATE invoices SET days=$1, route=$2, subtotal=$3, tps=$4, tvq=$5, total=$6 WHERE id=$7`,
-      [days, route, subtotal, tps, tvq, total, req.params.id]
+      `UPDATE invoices SET days=$1, route=$2, hours=COALESCE($3, hours) WHERE id=$4`,
+      [days, route, hours != null ? parseFloat(hours) : null, req.params.id]
     );
-    res.json({ success: true });
+    // Recalculate server-side so extras are always included
+    await recalcContractInvoice(req.params.id);
+    const { rows } = await pool.query(`SELECT * FROM invoices WHERE id = $1`, [req.params.id]);
+    res.json({ success: true, invoice: rows[0] });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 // Get extra fees for an invoice
@@ -1593,12 +1596,13 @@ router.post('/invoices/:id/extras', async (req, res) => {
       created_at TIMESTAMP DEFAULT NOW()
     )`);
     const { description, amount } = req.body;
+    const priorExtras = await sumExtras(req.params.id);
     await pool.query(
       `INSERT INTO invoice_extras (invoice_id, description, amount) VALUES ($1, $2, $3)`,
       [req.params.id, description, parseFloat(amount)]
     );
     // Recalculate invoice total
-    await recalcContractInvoice(req.params.id);
+    await recalcContractInvoice(req.params.id, priorExtras);
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -1606,20 +1610,41 @@ router.post('/invoices/:id/extras', async (req, res) => {
 // Delete extra fee
 router.delete('/invoices/:id/extras/:extraId', async (req, res) => {
   try {
+    const priorExtras = await sumExtras(req.params.id);
     await pool.query(`DELETE FROM invoice_extras WHERE id = $1 AND invoice_id = $2`,
       [req.params.extraId, req.params.id]);
-    await recalcContractInvoice(req.params.id);
+    await recalcContractInvoice(req.params.id, priorExtras);
     res.json({ success: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
 // Recalculate contract invoice totals including extras
-async function recalcContractInvoice(invoiceId) {
+async function sumExtras(invoiceId) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(amount), 0) AS s FROM invoice_extras WHERE invoice_id = $1`, [invoiceId]
+  );
+  return parseFloat(rows[0].s);
+}
+
+// priorExtrasTotal: extras total *before* the change, used to recover the UAP
+// base for older invoices that don't have hours stored yet.
+async function recalcContractInvoice(invoiceId, priorExtrasTotal = null) {
   const { rows: inv } = await pool.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId]);
   if (!inv.length) return;
-  const { rows: extras } = await pool.query(`SELECT * FROM invoice_extras WHERE invoice_id = $1`, [invoiceId]);
-  const extrasTotal = extras.reduce((s, e) => s + parseFloat(e.amount), 0);
-  const baseSubtotal = parseFloat(inv[0].days || 5) * (inv[0].route === 'ontario' ? 749.99 : 585.00);
+  const extrasTotal = await sumExtras(invoiceId);
+  let baseSubtotal;
+  if (inv[0].client_id === 'uap') {
+    // UAP: hours × $24
+    let hours = inv[0].hours != null ? parseFloat(inv[0].hours) : null;
+    if (hours == null) {
+      const prior = priorExtrasTotal != null ? priorExtrasTotal : extrasTotal;
+      hours = Math.round(((parseFloat(inv[0].subtotal || 0) - prior) / 24) * 100) / 100;
+      await pool.query(`UPDATE invoices SET hours = $1 WHERE id = $2`, [hours, invoiceId]);
+    }
+    baseSubtotal = hours * 24;
+  } else {
+    baseSubtotal = parseFloat(inv[0].days || 5) * (inv[0].route === 'ontario' ? 749.99 : 585.00);
+  }
   const subtotal = baseSubtotal + extrasTotal;
   const tps = subtotal * 0.05;
   const tvq = subtotal * 0.09975;

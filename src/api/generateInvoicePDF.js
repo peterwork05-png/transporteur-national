@@ -47,8 +47,11 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = [], e
 
   if (isContract) {
     if (isUAP) {
-      // UAP: use stored subtotal from DB
-      subtotal = parseFloat(invoice.subtotal || 0) + extrasTotal;
+      // UAP: hours × $24 + extras. Stored subtotal already includes extras.
+      const uapBase = invoice.hours != null
+        ? parseFloat(invoice.hours) * 24
+        : parseFloat(invoice.subtotal || 0) - extrasTotal;
+      subtotal = uapBase + extrasTotal;
     } else {
       // Staples: use hardcoded daily rates
       const baseRate = invoice.route === 'ontario' ? 749.99 : 585.00;
@@ -61,7 +64,9 @@ export function generateInvoiceHTML(invoice, orders, clientGroup, extras = [], e
   const total = subtotal + tps + tvq;
 
   // Calculate hours for UAP display
-  const uapHours = isUAP ? ((subtotal - extrasTotal) / 24).toFixed(2) : null;
+  const uapHours = isUAP
+    ? (invoice.hours != null ? parseFloat(invoice.hours) : (subtotal - extrasTotal) / 24).toFixed(2)
+    : null;
 
   const extrasRows = (extras || []).map(e => `
     <tr>

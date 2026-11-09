@@ -160,17 +160,11 @@ export default function AdminInvoices() {
   const handleSaveContractEdit = async () => {
     setSavingContract(true);
     try {
-      let sub;
-      if (selected.client_id === 'uap') {
-        sub = editHours * 24;
-      } else {
-        const rate = CONTRACT_RATES[editRoute]?.daily || 0;
-        sub = rate * editDays;
-      }
-      const tps = sub * TPS; const tvq = sub * TVQ; const total = sub + tps + tvq;
-      await fetch(`/api/invoices/${selected.id}/edit-contract`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({days:editDays,route:editRoute,subtotal:sub.toFixed(2),tps:tps.toFixed(2),tvq:tvq.toFixed(2),total:total.toFixed(2)}) });
+      // Server recalculates subtotal/taxes (base + extra fees)
+      const res = await fetch(`/api/invoices/${selected.id}/edit-contract`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({days:editDays,route:editRoute,hours:selected.client_id==='uap'?editHours:null}) });
+      const data = await res.json();
       await fetchInvoices();
-      setSelected(prev=>({...prev,days:editDays,route:editRoute,subtotal:sub.toFixed(2),tps:tps.toFixed(2),tvq:tvq.toFixed(2),total:total.toFixed(2),amount:total}));
+      if (data.invoice) setSelected(prev=>({...prev,...data.invoice,amount:parseFloat(data.invoice.total)}));
       setShowEditContract(false);
     } catch(e) { console.error(e); }
     setSavingContract(false);
@@ -557,7 +551,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
 
               {/* Contract edit */}
               {selected.type==='contract'&&(
-                <button onClick={()=>{setEditDays(selected.days||5);setEditRoute(selected.route||'ontario');setShowEditContract(true);}} className="btn btn-outline btn-sm w-full justify-center text-xs">
+                <button onClick={()=>{setEditDays(selected.days||5);setEditRoute(selected.route||'ontario');if(selected.client_id==='uap')setEditHours(selected.hours!=null?parseFloat(selected.hours):(selected.days||5)*9);setShowEditContract(true);}} className="btn btn-outline btn-sm w-full justify-center text-xs">
                   {selected.client_id==='uap'?'✏️ Edit hours / days':'✏️ Edit days / route'}
                 </button>
               )}
@@ -586,7 +580,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
                         {[1,2,3,4,5,6].map(d=><option key={d} value={d}>{d} day{d>1?'s':''}</option>)}
                       </select>
                     </div>
-                    {(()=>{const rate=CONTRACT_RATES[editRoute]?.daily||0;const sub=rate*editDays;const tps=sub*TPS;const tvq=sub*TVQ;const total=sub+tps+tvq;return(
+                    {(()=>{const base=selected.client_id==='uap'?editHours*24:(CONTRACT_RATES[editRoute]?.daily||0)*editDays;const sub=base+invoiceExtras.reduce((s,e)=>s+parseFloat(e.amount||0),0);const tps=sub*TPS;const tvq=sub*TVQ;const total=sub+tps+tvq;return(
                       <div className="rounded-lg p-3 text-xs space-y-1" style={{background:'white'}}>
                         <div className="flex justify-between"><span style={{color:'var(--tn-gold)'}}>Subtotal</span><span>{fmt(sub)}</span></div>
                         <div className="flex justify-between"><span style={{color:'var(--tn-gold)'}}>TPS 5%</span><span>{fmt(tps)}</span></div>

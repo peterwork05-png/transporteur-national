@@ -104,11 +104,11 @@ export async function generateUAPInvoice(dateFrom, dateTo) {
     const nextId = (parseInt(lastInv[0].last_id) || 599) + 1;
 
     const { rows: inv } = await pool.query(`
-      INSERT INTO invoices (id, client_id, type, route, date_from, date_to, days, subtotal, tps, tvq, total, status)
-      VALUES ($1, 'uap', 'contract', 'UAP St-Sauveur', $2, $3, $4, $5, $6, $7, $8, 'pending')
+      INSERT INTO invoices (id, client_id, type, route, date_from, date_to, days, hours, subtotal, tps, tvq, total, status)
+      VALUES ($1, 'uap', 'contract', 'UAP St-Sauveur', $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
       ON CONFLICT (id) DO NOTHING
       RETURNING id
-    `, [nextId, dateFrom, dateTo, workDays,
+    `, [nextId, dateFrom, dateTo, workDays, workDays * HOURS_PER_DAY,
         subtotal.toFixed(2), tps.toFixed(2), tvq.toFixed(2), total.toFixed(2)]);
 
     console.log(`✅ UAP Invoice #${nextId}: ${workDays} days × ${HOURS_PER_DAY}h × $${HOURLY_RATE} = $${total.toFixed(2)}`);
