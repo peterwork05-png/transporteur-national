@@ -230,15 +230,17 @@ try {
 // Create order
 router.post('/orders', async (req, res) => {
   try {
-    const { client_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone } = req.body;
+    const { address, boxes, amount, date, notes, billing_name, billing_email, billing_phone } = req.body;
+    const client_id = req.body.client_id || null;
+    const pickup_location = req.body.pickup_location || null;
     const id = req.body.id || `DEL-${new Date().getFullYear()}-MANUAL-${Date.now()}`;
     const driver_id = req.body.driver_id || null;
     const { rows } = await pool.query(`
-      INSERT INTO orders (id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO orders (id, client_id, driver_id, address, boxes, amount, date, notes, billing_name, billing_email, billing_phone, pickup_location)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (id) DO NOTHING
       RETURNING *
-    `, [id, client_id, driver_id, address, boxes, amount, date || new Date().toISOString().split('T')[0], notes, billing_name, billing_email, billing_phone]);
+    `, [id, client_id, driver_id, address, boxes, amount, date || new Date().toISOString().split('T')[0], notes, billing_name, billing_email, billing_phone, pickup_location]);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1052,6 +1054,9 @@ router.post('/invoices/:id/generate-pdf', async (req, res) => {
 router.patch('/orders/:id/edit', async (req, res) => {
   try {
     const { address, boxes, amount, date, driver_id, status, notes } = req.body;
+    // client_id / pickup_location only change when sent; '' clears them
+    const hasClient = Object.prototype.hasOwnProperty.call(req.body, 'client_id');
+    const hasPickup = Object.prototype.hasOwnProperty.call(req.body, 'pickup_location');
     const { rows } = await pool.query(`
       UPDATE orders SET
         address   = COALESCE($1, address),
@@ -1061,9 +1066,12 @@ router.patch('/orders/:id/edit', async (req, res) => {
         driver_id = $5,
         status    = COALESCE($6, status),
         notes     = COALESCE($7, notes),
+        client_id       = CASE WHEN $9  THEN $10 ELSE client_id END,
+        pickup_location = CASE WHEN $11 THEN $12 ELSE pickup_location END,
         updated_at = NOW()
       WHERE id = $8 RETURNING *
-    `, [address, boxes, amount, date, driver_id || null, status || null, notes || null, req.params.id]);
+    `, [address, boxes, amount, date, driver_id || null, status || null, notes || null, req.params.id,
+        hasClient, req.body.client_id || null, hasPickup, req.body.pickup_location || null]);
     res.json(rows[0]);
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
@@ -2025,7 +2033,7 @@ router.get('/client/orders', async (req, res) => {
       FROM orders o
       LEFT JOIN drivers d ON o.driver_id = d.id
       LEFT JOIN clients c ON o.client_id = c.id
-      WHERE (c.client_group = $1 OR LOWER(o.billing_email) IN (
+      WHERE (c.client_group = $1 OR o.client_id = $1 OR LOWER(o.billing_email) IN (
   SELECT LOWER(email) FROM clients WHERE client_group = $1
 )) ${dateFilter}
       ORDER BY o.date DESC, o.created_at DESC

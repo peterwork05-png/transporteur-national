@@ -15,7 +15,8 @@ const STATUS_STEPS  = ['waiting','accepted','picked','enroute','delivered'];
 const STATUS_LABELS = { waiting:'Order placed', accepted:'Accepted', picked:'Picked up', enroute:'En route', delivered:'Delivered', attempted:'Attempted delivery' };
 
 export default function AdminOrders() {
-  const { orders, drivers, fetchOrders, updateOrderStatus } = useApp();
+  const { orders, drivers, clients = [], fetchOrders, updateOrderStatus } = useApp();
+  const clientOptions = [...clients].filter(c => c.active !== false).sort((a,b) => (a.name||'').localeCompare(b.name||''));
   const [tab,       setTab]       = useState('All');
   const [period,    setPeriod]    = useState('today');
   const [dateFrom,  setDateFrom]  = useState('');
@@ -37,7 +38,7 @@ export default function AdminOrders() {
   const [editForm,   setEditForm]   = useState({});
   const [createForm, setCreateForm] = useState({
     id: '', address: '', boxes: 1, amount: '', date: new Date().toISOString().split('T')[0],
-    notes: '', driver_id: '', status: 'waiting',
+    notes: '', driver_id: '', status: 'waiting', client_id: '', pickup_location: '',
   });
 
   const openEdit = (order) => {
@@ -49,6 +50,8 @@ export default function AdminOrders() {
       notes:     order.notes || '',
       driver_id: order.driver_id || order.driver || '',
       status:    order.status || 'waiting',
+      client_id: order.client_id || order.client || '',
+      pickup_location: order.pickup_location || '',
     });
     setShowEdit(true);
   };
@@ -68,19 +71,28 @@ export default function AdminOrders() {
           driver_id: editForm.driver_id || null,
           status:    editForm.status,
           notes:     editForm.notes,
+          client_id: editForm.client_id || '',
+          pickup_location: editForm.pickup_location || '',
         }),
       });
+      const newClient = clients.find(c => c.id === editForm.client_id);
+      const clientFields = {
+        client: editForm.client_id || null,
+        client_id: editForm.client_id || null,
+        client_name: newClient?.name || null,
+        clientName: newClient?.name || selected.to_business_name || selected.billing_name || null,
+      };
       if (period === 'today') await fetchOrders();
       else {
         setAllOrders(prev => prev.map(o => o.id === selected.id ? {
-          ...o, ...editForm,
+          ...o, ...editForm, ...clientFields,
           driver: editForm.driver_id,
           driver_id: editForm.driver_id,
         } : o));
       }
       const fullDriver = drivers.find(d => d.id === editForm.driver_id);
 setSelected(prev => ({ 
-  ...prev, ...editForm, 
+  ...prev, ...editForm, ...clientFields,
   driver: editForm.driver_id, 
   driver_id: editForm.driver_id,
   driverName: fullDriver?.name || editForm.driver_id,
@@ -104,7 +116,7 @@ setSelected(prev => ({
       });
       if (period === 'today') await fetchOrders();
       setShowCreate(false);
-      setCreateForm({ id:'', address:'', boxes:1, amount:'', date:new Date().toISOString().split('T')[0], notes:'', driver_id:'', status:'waiting' });
+      setCreateForm({ id:'', address:'', boxes:1, amount:'', date:new Date().toISOString().split('T')[0], notes:'', driver_id:'', status:'waiting', client_id:'', pickup_location:'' });
     } catch(e) { console.error(e); }
     setSaving(false);
   };
@@ -705,6 +717,14 @@ const localDrivers = drivers.filter(d => d.role === 'local' || d.role === 'local
               <button onClick={() => setShowEdit(false)} className="text-xl" style={{color:'rgba(250,247,240,0.4)'}}>×</button>
             </div>
             <div className="p-5 space-y-3">
+              <div>
+                <label className="label">Client</label>
+                <select className="input" value={editForm.client_id} onChange={e=>setEditForm(f=>({...f,client_id:e.target.value}))}>
+                  <option value="">— No client —</option>
+                  {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div><label className="label">Pickup address</label><input className="input" placeholder="Where the driver picks up" value={editForm.pickup_location} onChange={e=>setEditForm(f=>({...f,pickup_location:e.target.value}))} /></div>
               <div><label className="label">Delivery address</label><input className="input" value={editForm.address} onChange={e=>setEditForm(f=>({...f,address:e.target.value}))} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">Boxes</label><input type="number" className="input" value={editForm.boxes} onChange={e=>setEditForm(f=>({...f,boxes:parseInt(e.target.value)||1}))} /></div>
@@ -752,6 +772,14 @@ const localDrivers = drivers.filter(d => d.role === 'local' || d.role === 'local
             </div>
             <div className="p-5 space-y-3">
               <div><label className="label">Order ID (optional)</label><input className="input font-mono" placeholder="e.g. DEL-2026-9999" value={createForm.id} onChange={e=>setCreateForm(f=>({...f,id:e.target.value}))} /></div>
+              <div>
+                <label className="label">Client (optional)</label>
+                <select className="input" value={createForm.client_id} onChange={e=>setCreateForm(f=>({...f,client_id:e.target.value}))}>
+                  <option value="">— No client —</option>
+                  {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div><label className="label">Pickup address (optional)</label><input className="input" placeholder="Where the driver picks up" value={createForm.pickup_location} onChange={e=>setCreateForm(f=>({...f,pickup_location:e.target.value}))} /></div>
               <div><label className="label">Delivery address *</label><input className="input" placeholder="123 Rue Example, Montréal" value={createForm.address} onChange={e=>setCreateForm(f=>({...f,address:e.target.value}))} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">Boxes</label><input type="number" className="input" value={createForm.boxes} onChange={e=>setCreateForm(f=>({...f,boxes:parseInt(e.target.value)||1}))} /></div>
