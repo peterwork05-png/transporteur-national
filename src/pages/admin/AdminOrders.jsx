@@ -16,7 +16,26 @@ const STATUS_LABELS = { waiting:'Order placed', accepted:'Accepted', picked:'Pic
 
 export default function AdminOrders() {
   const { orders, drivers, clients = [], fetchOrders, updateOrderStatus } = useApp();
-  const clientOptions = [...clients].filter(c => c.active !== false).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  // One dropdown entry per company: group logins by client_group and pick the
+  // main ordering login (finance-only logins are used only if nothing else exists).
+  const clientOptions = (() => {
+    const groups = {};
+    clients.filter(c => c.active !== false).forEach(c => {
+      const key = c.client_group || c.id;
+      (groups[key] = groups[key] || []).push(c);
+    });
+    const rank = (c, key) => (c.role === 'finance' ? 10 : 0) + (c.id === key ? 0 : c.id === `${key}_ops` ? 1 : 2);
+    return Object.entries(groups)
+      .map(([key, list]) => [...list].sort((a, b) => rank(a, key) - rank(b, key))[0])
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  })();
+  const clientLabel = (c) => c.email ? `${c.name} — ${c.email}` : c.name;
+  // Keep an order's current client selectable even if it isn't the company's main login
+  const clientOptionsFor = (currentId) => {
+    if (!currentId || clientOptions.some(c => c.id === currentId)) return clientOptions;
+    const cur = clients.find(c => c.id === currentId);
+    return cur ? [cur, ...clientOptions] : clientOptions;
+  };
   const [tab,       setTab]       = useState('All');
   const [period,    setPeriod]    = useState('today');
   const [dateFrom,  setDateFrom]  = useState('');
@@ -721,7 +740,7 @@ const localDrivers = drivers.filter(d => d.role === 'local' || d.role === 'local
                 <label className="label">Client</label>
                 <select className="input" value={editForm.client_id} onChange={e=>setEditForm(f=>({...f,client_id:e.target.value}))}>
                   <option value="">— No client —</option>
-                  {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {clientOptionsFor(editForm.client_id).map(c => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
                 </select>
               </div>
               <div><label className="label">Pickup address</label><input className="input" placeholder="Where the driver picks up" value={editForm.pickup_location} onChange={e=>setEditForm(f=>({...f,pickup_location:e.target.value}))} /></div>
@@ -776,7 +795,7 @@ const localDrivers = drivers.filter(d => d.role === 'local' || d.role === 'local
                 <label className="label">Client (optional)</label>
                 <select className="input" value={createForm.client_id} onChange={e=>setCreateForm(f=>({...f,client_id:e.target.value}))}>
                   <option value="">— No client —</option>
-                  {clientOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {clientOptions.map(c => <option key={c.id} value={c.id}>{clientLabel(c)}</option>)}
                 </select>
               </div>
               <div><label className="label">Pickup address (optional)</label><input className="input" placeholder="Where the driver picks up" value={createForm.pickup_location} onChange={e=>setCreateForm(f=>({...f,pickup_location:e.target.value}))} /></div>

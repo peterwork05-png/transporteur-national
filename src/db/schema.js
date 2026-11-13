@@ -162,6 +162,28 @@ export async function createTables() {
         AND NOT EXISTS (SELECT 1 FROM invoice_extras e WHERE e.invoice_id = i.id)
     `);
 
+    // One-time client cleanup (Nov 2026) — safe to re-run.
+    // 1) Move orders off duplicate logins, 2) delete empty junk clients.
+    await client.query(`UPDATE orders SET client_id = 'beg_ops' WHERE client_id = 'client_6153'`);
+    await client.query(`UPDATE orders SET client_id = 'staples_marie_france' WHERE client_id = 'client_6365'`);
+    const CLEANUP_CLIENT_IDS = [
+      'client_6153', 'client_6365', 'gs_client_1790353860141',
+      // "New Client" entries with no orders/invoices/email
+      'client_wc_6457', 'client_6301', 'client_6302', 'client_6305', 'client_6310', 'client_6315',
+      'client_6316', 'client_6339', 'client_6349', 'client_6363', 'client_6380', 'client_6381',
+      'client_6382', 'client_6383', 'client_6384', 'client_6385', 'client_6386', 'client_6387',
+      'client_6388', 'client_6389', 'client_6390', 'client_6391', 'client_6392', 'client_6413',
+      'client_6430', 'client_6431', 'client_6432', 'client_6433', 'client_6434', 'client_6435',
+    ];
+    const { rowCount: removedClients } = await client.query(`
+      DELETE FROM clients c
+      WHERE c.id = ANY($1)
+        AND NOT EXISTS (SELECT 1 FROM orders   o WHERE o.client_id = c.id)
+        AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.client_id = c.id)
+        AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.client_id = c.id)
+    `, [CLEANUP_CLIENT_IDS]);
+    if (removedClients) console.log(`🧹 Client cleanup: removed ${removedClients} unused client(s)`);
+
     console.log('✅ Database tables created successfully');
   } catch (err) {
     console.error('❌ Error creating tables:', err);

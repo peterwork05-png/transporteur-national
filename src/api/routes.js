@@ -476,7 +476,7 @@ router.post('/auth/verify-pin', async (req, res) => {
 
 router.get('/clients', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, name, address, email, language, signoff, active FROM clients ORDER BY name');
+    const { rows } = await pool.query('SELECT id, name, address, email, language, signoff, active, client_group, role FROM clients ORDER BY name');
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
