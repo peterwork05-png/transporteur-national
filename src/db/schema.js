@@ -184,6 +184,21 @@ export async function createTables() {
     `, [CLEANUP_CLIENT_IDS]);
     if (removedClients) console.log(`🧹 Client cleanup: removed ${removedClients} unused client(s)`);
 
+    // One-time fix (Nov 16): Friday's manual Jonarts order was typed in as DEL-2026-6471,
+    // which blocked website order #6471. Give it a safe manual ID. Only touches that exact
+    // order (Jonarts, created Nov 13) — never the website order once it's imported.
+    const OLD_ID = 'DEL-2026-6471', NEW_ID = 'DEL-2026-MANUAL-1794589250804';
+    const { rowCount: renamed } = await client.query(`
+      UPDATE orders SET id = $2
+      WHERE id = $1 AND client_id = 'jonarts' AND created_at::date = '2026-11-13'
+        AND NOT EXISTS (SELECT 1 FROM orders WHERE id = $2)
+    `, [OLD_ID, NEW_ID]);
+    if (renamed) {
+      const { rows: t } = await client.query(`SELECT to_regclass('invoice_orders') AS t`);
+      if (t[0].t) await client.query(`UPDATE invoice_orders SET order_id = $2 WHERE order_id = $1`, [OLD_ID, NEW_ID]);
+      console.log(`🔁 Renamed manual order ${OLD_ID} → ${NEW_ID}`);
+    }
+
     console.log('✅ Database tables created successfully');
   } catch (err) {
     console.error('❌ Error creating tables:', err);
