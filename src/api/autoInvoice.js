@@ -84,7 +84,7 @@ export function getInvoicePeriods(date = new Date()) {
 export async function generateUAPInvoice(dateFrom, dateTo) {
   try {
     const HOURLY_RATE = 24;
-    const HOURS_PER_DAY = 9; // Change to 8 if break is unpaid
+    const HOURS_PER_DAY = 8; // 40h for a full 5-day week
 
     // Count working days (Mon-Fri) in the period
     const start = new Date(dateFrom);

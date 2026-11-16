@@ -195,7 +195,7 @@ export default function AdminInvoices() {
   const handleCreate = async () => {
     let total = parseFloat(form.amount) || 0;
     if (form.type === 'contract' && form.client === 'uap') {
-      const hours = parseFloat(form.uapHours) || (form.days * 9);
+      const hours = parseFloat(form.uapHours) || (form.days * 8);
       const sub = hours * 24;
       total = sub * (1 + TPS + TVQ);
     } else if (form.type === 'contract' && !form.amount) {
@@ -551,7 +551,7 @@ if ((selected.client_id === 'staples_canada' || selected.client_id === 'client_6
 
               {/* Contract edit */}
               {selected.type==='contract'&&(
-                <button onClick={()=>{setEditDays(selected.days||5);setEditRoute(selected.route||'ontario');if(selected.client_id==='uap')setEditHours(selected.hours!=null?parseFloat(selected.hours):(selected.days||5)*9);setShowEditContract(true);}} className="btn btn-outline btn-sm w-full justify-center text-xs">
+                <button onClick={()=>{setEditDays(selected.days||5);setEditRoute(selected.route||'ontario');if(selected.client_id==='uap')setEditHours(selected.hours!=null?parseFloat(selected.hours):(selected.days||5)*8);setShowEditContract(true);}} className="btn btn-outline btn-sm w-full justify-center text-xs">
                   {selected.client_id==='uap'?'✏️ Edit hours / days':'✏️ Edit days / route'}
                 </button>
               )}
