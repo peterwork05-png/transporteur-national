@@ -174,6 +174,7 @@ export async function createTables() {
       'client_6382', 'client_6383', 'client_6384', 'client_6385', 'client_6386', 'client_6387',
       'client_6388', 'client_6389', 'client_6390', 'client_6391', 'client_6392', 'client_6413',
       'client_6430', 'client_6431', 'client_6432', 'client_6433', 'client_6434', 'client_6435',
+      'client_6472', 'client_6473', // blank checkouts, Nov 17
     ];
     const { rowCount: removedClients } = await client.query(`
       DELETE FROM clients c

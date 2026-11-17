@@ -249,6 +249,21 @@ router.post('/orders', async (req, res) => {
 
 // ── WOOCOMMERCE WEBHOOK ──────────────────────────────────
 
+// A WooCommerce checkout that was started but never completed leaves a blank
+// "pending" placeholder. Skip an order ONLY when it has nothing at all on it:
+// no items, $0, no email, no name, no address, no delivery details.
+// (Google Sheets orders use their own webhook and never go through this check.)
+function isEmptyWooOrder(order) {
+  const has = v => String(v ?? '').trim() !== '';
+  const b = order.billing || {}, sh = order.shipping || {};
+  const noItems   = !Array.isArray(order.line_items) || order.line_items.length === 0;
+  const noTotal   = !(parseFloat(order.total) > 0);
+  const noContact = !has(b.email) && !has(b.first_name) && !has(b.last_name) && !has(b.company) && !has(b.phone);
+  const noAddress = !has(b.address_1) && !has(sh.address_1);
+  const noDetails = !(order.meta_data || []).some(m => m && !String(m.key || '').startsWith('_') && has(m.value));
+  return noItems && noTotal && noContact && noAddress && noDetails;
+}
+
 router.post('/webhook/woocommerce', async (req, res) => {
   // Respond immediately so WooCommerce doesn't time out waiting for us
   res.json({ received: true });
@@ -256,6 +271,10 @@ router.post('/webhook/woocommerce', async (req, res) => {
   try {
     const order = req.body;
     console.log('WooCommerce webhook received:', JSON.stringify(order).substring(0, 500));
+    if (isEmptyWooOrder(order)) {
+      console.log(`⏭️  Skipped empty WooCommerce order #${order.id} (status: ${order.status}, no items, $0, no customer)`);
+      return;
+    }
 
     const wcOrderId = order.id || order.number || Date.now();
     const orderId = `DEL-${new Date().getFullYear()}-${String(wcOrderId).padStart(4, '0')}`;
@@ -1824,6 +1843,7 @@ router.post('/import/woocommerce', async (req, res) => {
 
     for (const order of allOrders) {
       try {
+        if (isEmptyWooOrder(order)) { skipped++; continue; }
         const wcOrderId = order.id;
         const orderId   = `DEL-${targetYear}-${String(wcOrderId).padStart(4,'0')}`;
 
